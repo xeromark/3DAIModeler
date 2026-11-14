@@ -5,6 +5,8 @@ from __future__ import annotations
 import bpy
 from bpy.props import BoolProperty, EnumProperty, IntProperty, PointerProperty, StringProperty
 
+from ..core.registry import ModelState
+from ..core.workflows import BUILDERS
 from . import runtime
 
 QUALITY_ITEMS = [
@@ -28,12 +30,14 @@ _model_items: list[tuple[str, str, str]] = []
 def model_items(_self: object, _context: object) -> list[tuple[str, str, str]]:
     global _model_items
     try:
-        reg = runtime.get().registry
-        _model_items = [
-            (m.id, m.name, f"{m.family} · {m.precision} · licencia {m.license}")
-            for m in reg.models.values()
-            if m.family in ("pixal3d",)  # familias con adaptador
-        ]
+        rt = runtime.get()
+        _model_items = []
+        for m in rt.registry.models.values():
+            if m.family not in BUILDERS:  # familias sin adaptador todavía
+                continue
+            installed = rt.model_states.get(m.id) is ModelState.INSTALLED
+            label = m.name if installed else f"{m.name} (sin descargar)"
+            _model_items.append((m.id, label, f"{m.family} · {m.precision} · {m.license}"))
     except RuntimeError:
         _model_items = []
     return _model_items or [("", "Sin modelos", "")]

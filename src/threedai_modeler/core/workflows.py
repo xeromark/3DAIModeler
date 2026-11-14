@@ -92,7 +92,8 @@ def _diffusion_file(registry: Registry, model_id: str) -> str:
     return names[0]
 
 
-def build_pixal3d(template: Workflow, registry: Registry, p: GenerationParams) -> Workflow:
+def build_trellis_family(template: Workflow, registry: Registry, p: GenerationParams) -> Workflow:
+    """Pixal3D y TRELLIS.2 comparten pipeline; solo cambian el acondicionamiento y el modelo."""
     wf = copy.deepcopy(template)
     q = p.quality
     set_input(wf, "load_image", "image", p.image)
@@ -118,7 +119,10 @@ def build_pixal3d(template: Workflow, registry: Registry, p: GenerationParams) -
     return wf
 
 
-BUILDERS = {"pixal3d": ("image_to_mesh", build_pixal3d)}
+BUILDERS = {
+    "pixal3d": ("image_to_mesh", build_trellis_family),
+    "trellis2": ("image_to_mesh", build_trellis_family),
+}
 """familia -> (plantilla, constructor)."""
 
 

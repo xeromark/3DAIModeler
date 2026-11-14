@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Any
 
 import bpy
-from bpy.props import StringProperty
+from bpy.props import BoolProperty, EnumProperty, StringProperty
 
 from ..core.engine import EngineState
 from ..core.jobs import Job
 from ..core.pipeline import Pipeline, Progress
-from ..core.registry import ModelState
+from ..core.registry import APPROVED_ORGS, ModelState, fetch_hf_file
 from ..core.tasks import Task, TaskBusyError, TaskContext, TaskStatus
 from . import prefs, runtime
 
@@ -144,6 +144,118 @@ class THREEDAI_OT_model_download(bpy.types.Operator):
             rt.reload_registry()
 
         return _start(self, "download", f"Descargar {model_id}", work, done)
+
+
+class THREEDAI_OT_model_remove(bpy.types.Operator):
+    bl_idname = "threedai.model_remove"
+    bl_label = "Borrar descarga"
+    bl_description = "Borra los archivos del modelo que no usa ningún otro modelo instalado"
+
+    model_id: StringProperty()
+
+    def invoke(self, context: bpy.types.Context, _event: bpy.types.Event) -> set[str]:
+        return context.window_manager.invoke_confirm(self, _event)
+
+    def execute(self, _context: bpy.types.Context) -> set[str]:
+        rt = runtime.get()
+        if (task := rt.tasks.get("generate")) is not None and task.running:
+            self.report({"WARNING"}, "Hay una generación en curso")
+            return {"CANCELLED"}
+        removed = rt.registry.remove_model(rt.ws, self.model_id)
+        freed = sum(1 for _ in removed)
+        self.report({"INFO"}, f"{freed} archivo(s) borrado(s)")
+        rt.reload_registry()
+        return {"FINISHED"}
+
+
+FAMILY_ITEMS = [
+    ("pixal3d", "Pixal3D", "Variante de Pixal3D (pesos de difusión)"),
+    ("trellis2", "TRELLIS.2", "Variante de TRELLIS.2 (pesos de difusión)"),
+]
+
+
+class THREEDAI_OT_variant_add(bpy.types.Operator):
+    bl_idname = "threedai.variant_add"
+    bl_label = "Agregar variante de modelo"
+    bl_description = (
+        "Agrega pesos de Hugging Face para una familia soportada. "
+        "Solo .safetensors; la revisión y el SHA-256 quedan fijados"
+    )
+
+    family: EnumProperty(name="Familia", items=FAMILY_ITEMS)
+    repo: StringProperty(name="Repositorio", description="organizacion/nombre en Hugging Face")
+    path: StringProperty(name="Archivo", description="Ruta del .safetensors dentro del repo")
+    name: StringProperty(name="Nombre", description="Nombre visible, p. ej. 'bf16'")
+    precision: StringProperty(name="Precisión", default="bf16")
+    license: StringProperty(name="Licencia", default="desconocida")
+    trust_org: BoolProperty(
+        name="Confío en esta organización",
+        description="Necesario si el repositorio no es de una organización aprobada",
+    )
+
+    def invoke(self, context: bpy.types.Context, _event: bpy.types.Event) -> set[str]:
+        return context.window_manager.invoke_props_dialog(self, width=480)
+
+    def draw(self, _context: bpy.types.Context) -> None:
+        col = self.layout.column()
+        for prop in ("family", "repo", "path", "name", "precision", "license"):
+            col.prop(self, prop)
+        org = self.repo.split("/", 1)[0]
+        if org and org not in APPROVED_ORGS:
+            box = col.box()
+            box.alert = True
+            box.label(text=f"'{org}' no es una organización aprobada.", icon="ERROR")
+            box.prop(self, "trust_org")
+
+    def execute(self, _context: bpy.types.Context) -> set[str]:
+        rt = runtime.get()
+        repo, path = self.repo.strip(), self.path.strip()
+        name = self.name.strip() or Path(path).stem
+        if not repo or not path:
+            self.report({"ERROR"}, "Indica el repositorio y el archivo")
+            return {"CANCELLED"}
+        if repo.split("/", 1)[0] not in APPROVED_ORGS and not self.trust_org:
+            self.report({"ERROR"}, "Confirma que confías en la organización")
+            return {"CANCELLED"}
+        family, precision, license_ = self.family, self.precision.strip(), self.license.strip()
+
+        def work(ctx: TaskContext) -> str:
+            ctx.report(f"Consultando {repo} en Hugging Face...")
+            weights = fetch_hf_file(repo, path)
+            model = rt.registry.make_variant(
+                weights, family=family, name=name, precision=precision, license=license_
+            )
+            rt.registry.add_user_variant(rt.ws, weights, model)
+            return model.id
+
+        def done(task: Task) -> None:
+            _refresh_after(task)
+            rt.reload_registry()
+            if task.status is TaskStatus.DONE:
+                task.message = f"Agregado: {task.result} (descárgalo en Modelos)"
+
+        return _start(self, "download", f"Agregar {repo}", work, done)
+
+
+class THREEDAI_OT_variant_remove(bpy.types.Operator):
+    bl_idname = "threedai.variant_remove"
+    bl_label = "Quitar variante"
+    bl_description = "Quita la variante del catálogo y borra su descarga"
+
+    model_id: StringProperty()
+
+    def invoke(self, context: bpy.types.Context, _event: bpy.types.Event) -> set[str]:
+        return context.window_manager.invoke_confirm(self, _event)
+
+    def execute(self, _context: bpy.types.Context) -> set[str]:
+        rt = runtime.get()
+        try:
+            rt.registry.remove_user_variant(rt.ws, self.model_id)
+        except ValueError as err:
+            self.report({"ERROR"}, str(err))
+            return {"CANCELLED"}
+        rt.reload_registry()
+        return {"FINISHED"}
 
 
 # ---------------------------------------------------------------- generar
@@ -314,6 +426,9 @@ CLASSES = (
     THREEDAI_OT_engine_stop,
     THREEDAI_OT_engine_logs,
     THREEDAI_OT_model_download,
+    THREEDAI_OT_model_remove,
+    THREEDAI_OT_variant_add,
+    THREEDAI_OT_variant_remove,
     THREEDAI_OT_generate,
     THREEDAI_OT_cancel,
     THREEDAI_OT_job_import,

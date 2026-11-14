@@ -26,3 +26,6 @@ El proyecto usa [SemVer](https://semver.org/lang/es/).
   progreso y cancelación, descarga de modelos, resultados (importar/reanudar).
 - `core/engine.py` (Runner Docker + EngineManager) y `core/tasks.py` (tareas en hilos de fondo).
 - `scripts/install-addon.sh`: instala el addon como repositorio local que apunta a `src/`.
+- Soporte de TRELLIS.2 (workflow y adaptador) como segundo modelo de generación.
+- Panel Modelos: descargar, borrar, uso de disco y variantes agregadas desde Hugging Face
+  (revisión fijada, SHA-256 obligatorio, solo `.safetensors`).

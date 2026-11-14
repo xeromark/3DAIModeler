@@ -337,15 +337,20 @@ empaquetadas. La comparación visual entre alta y baja queda registrada en el be
 **Aceptación:** desde un Blender recién abierto se llega a un modelo en escena sin usar la terminal,
 y la interfaz no se congela en ningún momento.
 
-### M4 — Gestor de modelos
+### M4 — Gestor de modelos *(completo)*
 
-- Panel **Modelos:** catálogo, estado (descargado o no), tamaño, licencia, descargar y borrar.
-- Elección de modelo por etapa (forma, textura, partes).
-- Agregar una variante: repositorio y archivo de Hugging Face, familia, y las validaciones de §4.4.
-- TRELLIS.2 como segundo modelo, para comparar contra Pixal3D en el benchmark.
+- [x] Panel **Modelos:** catálogo, estado (descargado o no), tamaño, licencia, descargar, borrar y
+  uso de disco.
+- [x] Elección del modelo de generación (forma + textura) en el panel Generar. El selector de
+  modelo de partes llega con M5.
+- [x] Agregar una variante: repositorio y archivo de Hugging Face y familia; revisión fijada al
+  commit, SHA-256 publicado obligatorio, solo `.safetensors`, confirmación para organizaciones no
+  aprobadas, validación de rutas; se guarda en `engine/user-registry.toml`.
+- [x] TRELLIS.2 como segundo modelo y comparación en el benchmark.
 
-**Aceptación:** se puede cambiar de Pixal3D a TRELLIS.2 desde la interfaz, sin código. Agregar
-Pixal3D bf16 como variante funciona de punta a punta.
+**Aceptación:** se puede cambiar de Pixal3D a TRELLIS.2 desde la interfaz, sin código. Agregar una
+variante (probado con `trellis_2_bf16` de `Comfy-Org/TRELLIS.2`, sin descargar 10 GB) funciona de
+punta a punta en el addon.
 
 ### M5 — Partes
 

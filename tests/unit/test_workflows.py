@@ -38,7 +38,7 @@ def test_presets_load(presets: Presets) -> None:
         presets.resolve_faces(10)
 
 
-@pytest.mark.parametrize("family", ["pixal3d"])
+@pytest.mark.parametrize("family", ["pixal3d", "trellis2"])
 def test_template_links_point_to_existing_nodes(family: str) -> None:
     wf = load_template(WORKFLOWS, family, "image_to_mesh")
     for node_id, node in wf.items():
@@ -48,10 +48,14 @@ def test_template_links_point_to_existing_nodes(family: str) -> None:
                 assert value[0] in wf, f"{node_id}.{name} -> {value[0]} no existe"
 
 
-def test_template_uses_registry_files(registry: Registry) -> None:
+FAMILY_MODELS = [("pixal3d", "pixal3d-int8"), ("trellis2", "trellis2-int8")]
+
+
+@pytest.mark.parametrize(("family", "model_id"), FAMILY_MODELS)
+def test_template_uses_registry_files(registry: Registry, family: str, model_id: str) -> None:
     """Cada archivo que carga la plantilla debe estar en el registro del modelo."""
-    wf = load_template(WORKFLOWS, "pixal3d", "image_to_mesh")
-    names = {f.filename for f in registry.files_of("pixal3d-int8")}
+    wf = load_template(WORKFLOWS, family, "image_to_mesh")
+    names = {f.filename for f in registry.files_of(model_id)}
     loader_inputs = ("bg_removal_name", "model_name", "clip_name", "vae_name", "unet_name")
     for node in wf.values():
         for key in loader_inputs:
@@ -91,9 +95,17 @@ def test_set_input_rejects_links_and_unknown() -> None:
 
 
 def test_unsupported_family(registry: Registry, presets: Presets) -> None:
-    params = GenerationParams("a.png", "trellis2-int8", presets.get_quality("draft"), 1000, 1)
+    params = GenerationParams("a.png", "pixal3d-multiview-int8", presets.get_quality("draft"), 1, 1)
     with pytest.raises(WorkflowError, match="sin adaptador"):
         build_workflow(WORKFLOWS, registry, params)
+
+
+def test_trellis2_has_no_camera_estimation(registry: Registry, presets: Presets) -> None:
+    params = GenerationParams("a.png", "trellis2-int8", presets.get_quality("draft"), 1000, 1)
+    wf = build_workflow(WORKFLOWS, registry, params)
+    assert wf["conditioning"]["class_type"] == "Trellis2Conditioning"
+    assert "moge" not in wf
+    assert wf["unet"]["inputs"]["unet_name"] == "trellis_2_int8_convrot.safetensors"
 
 
 def test_stage_labels() -> None:

@@ -1,5 +1,8 @@
 import hashlib
+import io
+import json
 import threading
+import urllib.request
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -15,6 +18,7 @@ from threedai_modeler.core.registry import (
     Registry,
     RegistryError,
     download_file,
+    fetch_hf_file,
     unapproved_orgs,
 )
 
@@ -176,3 +180,134 @@ def test_download_cancel_keeps_part(tmp_path: Path, server_url: str) -> None:
     with pytest.raises(DownloadCancelledError):
         download_file(spec(), dest, cancel=cancel, url=server_url)
     assert not dest.exists()
+
+
+# ------------------------------------------------------------- variantes
+
+
+def official_copy(tmp_path: Path) -> tuple[Workspace, Registry]:
+    ws = Workspace(tmp_path)
+    return ws, Registry.load(REPO_ROOT / "models" / "registry.toml", ws.user_registry_file)
+
+
+def bf16_weights() -> FileSpec:
+    return FileSpec(
+        "user-comfy-org-trellis-2-trellis-2-bf16",
+        "Comfy-Org/TRELLIS.2",
+        "430a9d09",
+        "diffusion_models/trellis_2_bf16.safetensors",
+        "diffusion_models",
+        10_340_000_000,
+        "b" * 64,
+    )
+
+
+def test_variant_reuses_family_shared_files(tmp_path: Path) -> None:
+    _ws, reg = official_copy(tmp_path)
+    model = reg.make_variant(bf16_weights(), family="trellis2", name="bf16", precision="bf16")
+    assert model.id == "trellis2-bf16"
+    assert model.files[0] == bf16_weights().id
+    assert "trellis2-int8" not in model.files  # pesos del modelo base excluidos
+    assert set(model.files[1:]) == set(reg.model("trellis2-int8").files) - {"trellis2-int8"}
+
+
+def test_variant_roundtrip_and_removal(tmp_path: Path) -> None:
+    ws, reg = official_copy(tmp_path)
+    weights = bf16_weights()
+    model = reg.make_variant(
+        weights, family="trellis2", name="bf16", precision="bf16", license="MIT"
+    )
+    reg.add_user_variant(ws, weights, model)
+
+    official = REPO_ROOT / "models" / "registry.toml"
+    again = Registry.load(official, ws.user_registry_file)
+    loaded = again.model("trellis2-bf16")
+    assert loaded.user_added and loaded.license == "MIT"
+    assert again.files[weights.id] == weights
+
+    again.remove_user_variant(ws, "trellis2-bf16")
+    final = Registry.load(official, ws.user_registry_file)
+    assert "trellis2-bf16" not in final.models
+    assert weights.id not in final.files
+
+
+def test_cannot_remove_official_as_variant(tmp_path: Path) -> None:
+    ws, reg = official_copy(tmp_path)
+    with pytest.raises(RegistryError, match="oficial"):
+        reg.remove_user_variant(ws, "pixal3d-int8")
+
+
+def test_variant_unknown_family(tmp_path: Path) -> None:
+    _ws, reg = official_copy(tmp_path)
+    with pytest.raises(RegistryError, match="familia"):
+        reg.make_variant(bf16_weights(), family="otra", name="x", precision="bf16")
+
+
+class FakeResponse(io.BytesIO):
+    def __enter__(self) -> "FakeResponse":
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        pass
+
+
+def test_fetch_hf_file_pins_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {
+        "sha": "deadbeef" * 5,
+        "siblings": [
+            {
+                "rfilename": "diffusion_models/m.safetensors",
+                "size": 123,
+                "lfs": {"sha256": "c" * 64, "size": 123},
+            }
+        ],
+    }
+    seen: list[str] = []
+
+    def fake_urlopen(req: urllib.request.Request, timeout: float) -> FakeResponse:
+        seen.append(req.full_url)
+        return FakeResponse(json.dumps(payload).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    spec = fetch_hf_file("Org/Repo", "diffusion_models/m.safetensors")
+    assert spec.revision == "deadbeef" * 5
+    assert spec.size == 123 and spec.sha256 == "c" * 64
+    assert spec.id == "user-org-repo-m"
+    assert seen[0].endswith("/api/models/Org/Repo/revision/main?blobs=true")
+
+
+@pytest.mark.parametrize(
+    ("siblings", "match"),
+    [
+        ([], "no tiene el archivo"),
+        ([{"rfilename": "m.ckpt", "size": 1, "lfs": {"sha256": "c" * 64}}], "safetensors"),
+        ([{"rfilename": "m.ckpt", "size": 1}], "SHA-256"),
+    ],
+)
+def test_fetch_hf_file_rejects(
+    monkeypatch: pytest.MonkeyPatch, siblings: list[dict[str, object]], match: str
+) -> None:
+    body = json.dumps({"sha": "a" * 40, "siblings": siblings}).encode()
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *_a, **_k: FakeResponse(body))
+    with pytest.raises(RegistryError, match=match):
+        fetch_hf_file("Org/Repo", "m.ckpt")
+
+
+@pytest.mark.parametrize("repo", ["../etc", "Org/..", "Org", "a/b/c", "-x/y", "Org/Repo?x=1"])
+def test_fetch_hf_file_invalid_repo(monkeypatch: pytest.MonkeyPatch, repo: str) -> None:
+    def no_network(*_a: object, **_k: object) -> None:
+        raise AssertionError("no debe consultar la red")
+
+    monkeypatch.setattr(urllib.request, "urlopen", no_network)
+    with pytest.raises(RegistryError, match="inválido"):
+        fetch_hf_file(repo, "x.safetensors")
+
+
+BAD_PATHS = ["../x.safetensors", "/etc/x.safetensors", "a/../../b.safetensors"]
+
+
+@pytest.mark.parametrize("path", BAD_PATHS)
+def test_fetch_hf_file_invalid_path(monkeypatch: pytest.MonkeyPatch, path: str) -> None:
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *_a, **_k: pytest.fail("red"))
+    with pytest.raises(RegistryError, match="inválida"):
+        fetch_hf_file("Org/Repo", path)

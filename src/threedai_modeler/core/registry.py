@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import re
 import threading
 import tomllib
+import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
@@ -90,6 +94,8 @@ class ModelSpec:
 class Registry:
     files: dict[str, FileSpec] = field(default_factory=dict)
     models: dict[str, ModelSpec] = field(default_factory=dict)
+    user_files: set[str] = field(default_factory=set)
+    """IDs de archivos que vienen del registro del usuario."""
 
     # ------------------------------------------------------------------ carga
 
@@ -113,6 +119,8 @@ class Registry:
             if fid in self.files:
                 raise RegistryError(f"archivo duplicado: {fid}")
             self.files[fid] = _parse_file(fid, raw)
+            if user_added:
+                self.user_files.add(fid)
         for raw in data.get("models", []):
             model = _parse_model(raw, user_added=user_added)
             if model.id in self.models:
@@ -204,6 +212,155 @@ class Registry:
                     p.unlink()
                     removed.append(p)
         return removed
+
+    # ------------------------------------------------ variantes del usuario
+
+    def make_variant(
+        self,
+        weights: FileSpec,
+        *,
+        family: str,
+        name: str,
+        precision: str,
+        license: str = "desconocida",
+    ) -> ModelSpec:
+        """Modelo nuevo de una familia soportada: sus pesos + los compartidos de la familia.
+
+        Los compartidos (VAE, codificador de imagen, quitar fondo...) se toman del modelo oficial
+        de la misma familia, todos menos sus pesos de difusión.
+        """
+        official = (m for m in self.models.values() if m.family == family and not m.user_added)
+        base = next(official, None)
+        if base is None:
+            raise RegistryError(f"familia no soportada: {family}")
+        shared = [f for f in base.files if self.files[f].dest != weights.dest]
+        model_id = _slug(f"{family}-{name}")
+        if model_id in self.models:
+            raise RegistryError(f"ya existe un modelo con id {model_id}")
+        return ModelSpec(
+            id=model_id,
+            name=name,
+            family=family,
+            roles=base.roles,
+            precision=precision,
+            license=license,
+            files=(weights.id, *shared),
+            user_added=True,
+        )
+
+    def add_user_variant(self, ws: Workspace, weights: FileSpec, model: ModelSpec) -> None:
+        if weights.id not in self.files:
+            self.files[weights.id] = weights
+            self.user_files.add(weights.id)
+        self.models[model.id] = model
+        self.validate()
+        self.save_user(ws.user_registry_file)
+
+    def remove_user_variant(self, ws: Workspace, model_id: str) -> list[Path]:
+        model = self.model(model_id)
+        if not model.user_added:
+            raise RegistryError(f"{model_id} es oficial; solo se puede borrar su descarga")
+        removed = self.remove_model(ws, model_id)
+        del self.models[model_id]
+        used = {f for m in self.models.values() for f in m.files}
+        for fid in list(self.user_files):
+            if fid not in used:
+                self.user_files.discard(fid)
+                del self.files[fid]
+        self.save_user(ws.user_registry_file)
+        return removed
+
+    def save_user(self, path: Path) -> None:
+        """Escribe el registro del usuario (solo sus archivos y modelos)."""
+        lines = ["# Modelos agregados desde el addon.", "", "schema = 1", ""]
+        for fid in sorted(self.user_files):
+            f = self.files[fid]
+            lines += [
+                f"[files.{fid}]",
+                f"repo = {_toml_str(f.repo)}",
+                f"revision = {_toml_str(f.revision)}",
+                f"path = {_toml_str(f.path)}",
+                f"dest = {_toml_str(f.dest)}",
+                f"size = {f.size}",
+                f"sha256 = {_toml_str(f.sha256)}",
+                "",
+            ]
+        for m in self.models.values():
+            if not m.user_added:
+                continue
+            lines += [
+                "[[models]]",
+                f"id = {_toml_str(m.id)}",
+                f"name = {_toml_str(m.name)}",
+                f"family = {_toml_str(m.family)}",
+                f"roles = {json.dumps(list(m.roles))}",
+                f"precision = {_toml_str(m.precision)}",
+                f"license = {_toml_str(m.license)}",
+                f"files = {json.dumps(list(m.files))}",
+                "",
+            ]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text("\n".join(lines))
+        tmp.replace(path)
+
+
+# ---------------------------------------------------------- Hugging Face
+
+
+def fetch_hf_file(
+    repo: str,
+    path: str,
+    revision: str = "main",
+    dest: str = "diffusion_models",
+    timeout: float = 30,
+) -> FileSpec:
+    """Consulta Hugging Face y devuelve el FileSpec con la revisión fijada a un commit."""
+    if not re.fullmatch(r"[A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*", repo) or ".." in repo:
+        raise RegistryError(f"repositorio inválido: {repo!r} (formato: organizacion/nombre)")
+    if ".." in PurePosixPath(path).parts or path.startswith("/"):
+        raise RegistryError(f"ruta de archivo inválida: {path!r}")
+    api = (
+        f"{HF_BASE_URL}/api/models/{repo}/revision/{urllib.parse.quote(revision, safe='')}"
+        "?blobs=true"
+    )
+    request = urllib.request.Request(api, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as resp:
+            info = json.load(resp)
+    except urllib.error.HTTPError as err:
+        if err.code in (401, 403):
+            raise RegistryError(f"{repo} es privado o pide aceptar su licencia en la web") from err
+        if err.code == 404:
+            raise RegistryError(f"no existe {repo} (o la revisión {revision})") from err
+        raise RegistryError(f"Hugging Face respondió HTTP {err.code}") from err
+    except (urllib.error.URLError, OSError) as err:
+        raise RegistryError(f"sin conexión con Hugging Face: {err}") from err
+    if info.get("gated"):
+        raise RegistryError(f"{repo} requiere aceptar su licencia en la web (gated)")
+    sibling = next((s for s in info.get("siblings", []) if s.get("rfilename") == path), None)
+    if sibling is None:
+        raise RegistryError(f"{repo} no tiene el archivo {path}")
+    lfs = sibling.get("lfs") or {}
+    if not lfs.get("sha256"):
+        raise RegistryError(f"{path} no tiene hash SHA-256 publicado (no es un archivo LFS)")
+    raw = {
+        "repo": repo,
+        "revision": info["sha"],
+        "path": path,
+        "dest": dest,
+        "size": lfs.get("size") or sibling.get("size"),
+        "sha256": lfs["sha256"],
+    }
+    return _parse_file(_slug(f"user-{repo}-{PurePosixPath(path).stem}"), raw)
+
+
+def _slug(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+
+
+def _toml_str(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
 
 
 # ---------------------------------------------------------------- descargas

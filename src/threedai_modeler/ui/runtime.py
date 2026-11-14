@@ -6,7 +6,7 @@ import threading
 from pathlib import Path
 
 from ..core.comfy import ComfyClient
-from ..core.engine import EngineManager, EngineState, default_manager
+from ..core.engine import EngineManager, EngineState, default_manager, engine_disk_usage
 from ..core.jobs import Job
 from ..core.paths import Workspace
 from ..core.presets import Presets
@@ -14,6 +14,8 @@ from ..core.registry import ModelState, Registry
 from ..core.tasks import TaskRegistry
 
 POLL_SECONDS = 3.0
+DISK_EVERY = 20
+"""Recalcular el uso de disco cada N sondeos (~1 min)."""
 
 
 class Runtime:
@@ -30,6 +32,9 @@ class Runtime:
         self.model_states: dict[str, ModelState] = {}
         self.recent_jobs: list[Job] = []
         self.last_error: str | None = None
+        self.engine_disk_bytes: int | None = None
+        self.models_disk_bytes = 0
+        self._polls = 0
         self.version = 0
         """Sube cada vez que cambia algo visible: la interfaz se redibuja."""
 
@@ -62,6 +67,16 @@ class Runtime:
             state, message = self.manager.status()
             states = {m: self.registry.state(self.ws, m) for m in self.registry.models}
             jobs = Job.list_all(self.ws)[-8:][::-1]
+            installed = {
+                f.id: f.size
+                for m in self.registry.models
+                for f in self.registry.files_of(m)
+                if self.registry.is_file_installed(self.ws, f)
+            }
+            self.models_disk_bytes = sum(installed.values())
+            if self._polls % DISK_EVERY == 0:
+                self.engine_disk_bytes = engine_disk_usage(self.ws)
+            self._polls += 1
         except Exception as exc:  # el sondeo nunca debe morir
             state, message, states, jobs = EngineState.UNAVAILABLE, str(exc), {}, []
         changed = (
@@ -78,6 +93,7 @@ class Runtime:
 
     def reload_registry(self) -> None:
         self.registry = Registry.for_workspace(self.ws)
+        self._polls = 0  # recalcular disco
         self.refresh()
 
 

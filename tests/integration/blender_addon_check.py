@@ -27,6 +27,8 @@ bpy.ops.extensions.repo_refresh_all()
 module = "bl_ext.threedai_test.threedai_modeler"
 bpy.ops.preferences.addon_enable(module=module)
 assert module in bpy.context.preferences.addons, "el addon no se habilitó"
+# No detener el motor al deshabilitar el addon al final de la prueba.
+bpy.context.preferences.addons[module].preferences.stop_engine_on_exit = False
 
 ui = sys.modules[module + ".ui"]
 runtime = sys.modules[module + ".ui.runtime"]
@@ -49,6 +51,34 @@ pump(10, until=lambda: rt.engine_message != "Consultando...")
 print("ENGINE", rt.engine_state, rt.engine_message)
 print("MODELS", {k: v.value for k, v in rt.model_states.items()})
 assert bpy.ops.threedai.engine_logs() == {"FINISHED"}
+
+# Variante de modelo: consulta real a Hugging Face (sin descargar los pesos).
+user_registry = rt.ws.user_registry_file
+backup = user_registry.read_bytes() if user_registry.exists() else None
+try:
+    assert bpy.ops.threedai.variant_add(
+        "EXEC_DEFAULT",
+        family="trellis2",
+        repo="Comfy-Org/TRELLIS.2",
+        path="diffusion_models/trellis_2_bf16.safetensors",
+        name="bf16 prueba",
+        precision="bf16",
+        license="MIT",
+    ) == {"FINISHED"}
+    variant_task = rt.tasks.get("download")
+    pump(60, until=lambda: not variant_task.running)
+    pump(1)
+    assert variant_task.status.value == "done", variant_task.error
+    model = rt.registry.model("trellis2-bf16-prueba")
+    assert model.user_added and model.files[0].startswith("user-")
+    print("VARIANT", model.id, rt.registry.model_size(model.id) // 10**9, "GB")
+    assert bpy.ops.threedai.variant_remove("EXEC_DEFAULT", model_id=model.id) == {"FINISHED"}
+    assert "trellis2-bf16-prueba" not in rt.registry.models
+finally:
+    if backup is None:
+        user_registry.unlink(missing_ok=True)
+    else:
+        user_registry.write_bytes(backup)
 
 if image is not None:
     props = bpy.context.scene.threedai

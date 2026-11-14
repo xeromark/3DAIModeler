@@ -7,6 +7,7 @@ import bpy
 from ..core.engine import EngineState
 from ..core.registry import ModelState
 from ..core.tasks import Task, TaskStatus
+from ..core.workflows import BUILDERS
 from . import runtime
 
 STATE_UI = {
@@ -124,6 +125,59 @@ class THREEDAI_PT_generate(_Base, bpy.types.Panel):
         draw_task(layout, gen)
 
 
+STATE_ICON = {
+    ModelState.INSTALLED: "CHECKMARK",
+    ModelState.PARTIAL: "DOWNARROW_HLT",
+    ModelState.MISSING: "BLANK1",
+}
+
+
+class THREEDAI_PT_models(_Base, bpy.types.Panel):
+    bl_label = "Modelos"
+    bl_parent_id = "THREEDAI_PT_main"
+    bl_options = {"DEFAULT_CLOSED"}  # noqa: RUF012 (atributo de clase que lee Blender)
+
+    def draw(self, _context: bpy.types.Context) -> None:
+        rt = runtime.get()
+        layout = self.layout
+        engine = rt.engine_disk_bytes
+        disk = f"Modelos {rt.models_disk_bytes / 1e9:.1f} GB"
+        if engine is not None:
+            disk += f" · motor total {engine / 1e9:.1f} GB"
+        layout.label(text=disk, icon="DISK_DRIVE")
+
+        download = rt.tasks.get("download")
+        busy = download is not None and download.running
+        gen = rt.tasks.get("generate")
+        generating = gen is not None and gen.running
+        for model in rt.registry.models.values():
+            state = rt.model_states.get(model.id, ModelState.MISSING)
+            box = layout.box()
+            row = box.row(align=True)
+            row.label(text=model.name, icon=STATE_ICON[state])
+            size = rt.registry.model_size(model.id) / 1e9
+            sub = box.row()
+            sub.scale_y = 0.7
+            supported = "" if model.family in BUILDERS else " · próximamente"
+            info = f"{model.family} · {model.precision} · {size:.1f} GB · {model.license}"
+            sub.label(text=info + supported)
+            actions = row.row(align=True)
+            actions.enabled = not busy
+            if state is not ModelState.INSTALLED:
+                op = actions.operator("threedai.model_download", text="", icon="IMPORT")
+                op.model_id = model.id
+            if state is not ModelState.MISSING:
+                rm = actions.row(align=True)
+                rm.enabled = not generating
+                rm.operator("threedai.model_remove", text="", icon="TRASH").model_id = model.id
+            if model.user_added:
+                actions.operator("threedai.variant_remove", text="", icon="X").model_id = model.id
+        draw_task(layout, download)
+        row = layout.row()
+        row.enabled = not busy
+        row.operator("threedai.variant_add", icon="ADD")
+
+
 class THREEDAI_PT_results(_Base, bpy.types.Panel):
     bl_label = "Resultados"
     bl_parent_id = "THREEDAI_PT_main"
@@ -160,4 +214,10 @@ def _wrap(text: str, width: int) -> list[str]:
     return [*lines, line] if line else lines
 
 
-CLASSES = (THREEDAI_PT_main, THREEDAI_PT_engine, THREEDAI_PT_generate, THREEDAI_PT_results)
+CLASSES = (
+    THREEDAI_PT_main,
+    THREEDAI_PT_engine,
+    THREEDAI_PT_generate,
+    THREEDAI_PT_models,
+    THREEDAI_PT_results,
+)
