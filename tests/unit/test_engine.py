@@ -188,3 +188,20 @@ def test_parse_size() -> None:
     assert parse_size("2.5GiB") == int(2.5 * 1024**3)
     assert parse_size(" 512MiB ") == 512 * 1024**2
     assert parse_size("raro") is None
+
+
+def test_stop_reports_when_engine_cannot_be_controlled() -> None:
+    runner = FakeRunner(running=False)  # Docker no ve el contenedor...
+    manager = EngineManager(runner, FakeClient(0))  # ...pero el motor responde
+    with pytest.raises(EngineError, match="no se pudo detener"):
+        manager.stop()
+
+
+def test_compose_inside_steam_container_uses_host_plugin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from threedai_modeler.core import engine
+
+    monkeypatch.setattr(engine.Path, "exists", lambda self: str(self) == engine.HOST_COMPOSE)
+    assert engine.find_compose("/run/host/usr/bin/docker") == [engine.HOST_COMPOSE]
+    assert engine.find_compose("/usr/bin/docker") == ["/usr/bin/docker", "compose"]

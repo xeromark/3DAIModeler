@@ -57,3 +57,6 @@ El proyecto usa [SemVer](https://semver.org/lang/es/).
 - Blender abierto desde Steam no veía Docker (corre dentro del contenedor de Steam): usa
   `/run/host/usr/bin/docker` y explica cómo exponer el socket.
 - Los trabajos creados antes de la etapa de partes aparecían como incompletos.
+- "Detener" no detenía el motor con Blender abierto desde Steam: dentro de su contenedor
+  `docker compose` no encuentra el plugin; ahora se usa el del sistema directamente. Si aun así
+  no se puede detener, el panel lo informa en vez de fallar en silencio.

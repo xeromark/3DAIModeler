@@ -79,6 +79,18 @@ def in_steam_container() -> bool:
     return marker == "pressure-vessel" or Path("/run/pressure-vessel").exists()
 
 
+HOST_COMPOSE = "/run/host/usr/lib/docker/cli-plugins/docker-compose"
+"""El plugin compose del sistema: dentro del contenedor de Steam `docker compose` no lo encuentra
+(busca los plugins en el /usr del contenedor)."""
+
+
+def find_compose(docker: str) -> list[str]:
+    """Comando base de Docker Compose: `docker compose` o el plugin del sistema directamente."""
+    if docker.startswith("/run/host/") and Path(HOST_COMPOSE).exists():
+        return [HOST_COMPOSE]
+    return [docker, "compose"]
+
+
 def find_docker() -> str:
     found = shutil.which("docker")
     if found:
@@ -94,6 +106,7 @@ class DockerRunner:
     def __init__(self, ws: Workspace, docker: str | None = None) -> None:
         self.ws = ws
         self.docker = docker or find_docker()
+        self.compose_cmd = find_compose(self.docker)
 
     # ------------------------------------------------------------ comandos
 
@@ -101,7 +114,7 @@ class DockerRunner:
         return {**os.environ, "HOST_UID": str(os.getuid()), "HOST_GID": str(os.getgid())}
 
     def _compose(self, *args: str) -> list[str]:
-        return [self.docker, "compose", "-f", str(self.ws.compose_file), *args]
+        return [*self.compose_cmd, "-f", str(self.ws.compose_file), *args]
 
     def _run(self, cmd: list[str], timeout: float = 60) -> subprocess.CompletedProcess[str]:
         try:
@@ -279,6 +292,12 @@ class EngineManager:
     def stop(self) -> None:
         if self.runner.is_running():
             self.runner.stop()
+        elif self.client.is_ready():
+            # El motor responde pero Docker no lo ve: no se puede controlar desde aquí.
+            self.runner.check_available()
+            raise EngineError(
+                "El motor está corriendo pero no se pudo detener (Docker Compose no responde)"
+            )
 
     def stop_detached(self) -> None:
         if self.runner.is_running():
