@@ -36,17 +36,26 @@ def _tick() -> float:
     return TICK_SECONDS
 
 
-def _on_exit() -> None:
-    """Al cerrar Blender: detener el motor si así está configurado."""
-    rt = runtime.shutdown()
+def _stop_engine_if_configured(rt: runtime.Runtime | None) -> None:
+    """Al cerrar Blender (o deshabilitar el addon): detener el motor si así está configurado.
+
+    Blender deshabilita los addons al salir, así que esto corre desde unregister(). La orden
+    se lanza desacoplada para no demorar el cierre.
+    """
     if rt is None:
         return
     try:
         preferences = prefs.get()
-        if preferences is None or preferences.stop_engine_on_exit:
-            rt.manager.stop()
+        if preferences is not None and not preferences.stop_engine_on_exit:
+            return
+        rt.manager.stop_detached()
     except Exception:
         pass
+
+
+def _on_exit() -> None:
+    """Respaldo por si Blender sale sin deshabilitar el addon."""
+    _stop_engine_if_configured(runtime.shutdown())
 
 
 def register() -> None:
@@ -63,7 +72,7 @@ def unregister() -> None:
     atexit.unregister(_on_exit)
     if bpy.app.timers.is_registered(_tick):
         bpy.app.timers.unregister(_tick)
-    runtime.shutdown()
+    _stop_engine_if_configured(runtime.shutdown())
     props.unregister()
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)

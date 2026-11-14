@@ -48,6 +48,10 @@ class FakeRunner:
     def logs(self, lines: int = 200) -> str:
         return ""
 
+    def stop_detached(self) -> None:
+        self.calls.append("stop_detached")
+        self.running = False
+
 
 class FakeClient(ComfyClient):
     def __init__(self, ready_after: int = 0) -> None:

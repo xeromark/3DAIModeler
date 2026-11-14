@@ -48,6 +48,8 @@ class Runner(Protocol):
     def start(self) -> None: ...
     def stop(self) -> None: ...
     def logs(self, lines: int = 200) -> str: ...
+    def stop_detached(self) -> None:
+        """Ordena detener sin esperar (para el cierre de Blender)."""
 
 
 class DockerRunner:
@@ -153,6 +155,16 @@ class DockerRunner:
         result = self._run(self._compose("logs", "--no-color", "--tail", str(lines), SERVICE))
         return result.stdout + result.stderr
 
+    def stop_detached(self) -> None:
+        subprocess.Popen(
+            self._compose("stop", SERVICE),
+            cwd=self.ws.root,
+            env=self._env(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+
 
 class EngineManager:
     def __init__(self, runner: Runner, client: ComfyClient) -> None:
@@ -201,6 +213,10 @@ class EngineManager:
     def stop(self) -> None:
         if self.runner.is_running():
             self.runner.stop()
+
+    def stop_detached(self) -> None:
+        if self.runner.is_running():
+            self.runner.stop_detached()
 
 
 def default_manager(ws: Workspace, client: ComfyClient | None = None) -> EngineManager:
