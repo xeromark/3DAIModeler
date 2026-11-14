@@ -116,7 +116,9 @@ class THREEDAI_PT_generate(_Base, bpy.types.Panel):
         sub.enabled = not props.random_seed
         sub.prop(props, "seed")
         layout.prop(props, "object_name")
-        layout.prop(props, "split_parts")
+        row = layout.row()
+        row.prop(props, "split_parts")
+        row.prop(props, "upright")
         parts_ready = True
         if props.split_parts:
             box = layout.box()

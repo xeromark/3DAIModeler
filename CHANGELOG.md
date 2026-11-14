@@ -33,6 +33,10 @@ El proyecto usa [SemVer](https://semver.org/lang/es/).
   (`./scripts/engine.sh setup-parts`), un objeto por parte en Blender; opción en el addon y en
   la CLI (`generate --parts`).
 - Vistas previas con partes coloreadas (`render_preview.py ... --color-parts`).
+- Enderezado automático del modelo (Pixal3D sigue la cámara de la imagen): opción "Enderezar"
+  en el addon, `--no-upright` en la CLI.
+- `bench`: genera un set de imágenes y escribe un informe en `docs/benchmarks/`.
+- `resume --from <etapa>`: repite una etapa y las siguientes sin regenerar el modelo.
 
 ### Fixed
 

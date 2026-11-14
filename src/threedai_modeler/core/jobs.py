@@ -53,6 +53,8 @@ class Job:
     """Nombre del objeto en Blender (por defecto, el nombre de la imagen)."""
     parts: bool = False
     """Separar el modelo en partes (P3-SAM)."""
+    upright: bool = True
+    """Enderezar el modelo si sale inclinado (ver worker/postprocess.py)."""
     root: Path = field(default=Path(), repr=False, compare=False)
 
     @property
@@ -66,6 +68,14 @@ class Job:
     def output_path(self, stage: str, key: str) -> Path | None:
         rel = self.stages[stage].outputs.get(key)
         return self.dir / rel if rel else None
+
+    def reset_from(self, stage: str) -> None:
+        """Marca `stage` y las etapas siguientes como pendientes (para repetirlas)."""
+        if stage not in STAGES:
+            raise JobError(f"etapa desconocida: {stage} (opciones: {', '.join(STAGES)})")
+        for name in STAGES[STAGES.index(stage) :]:
+            self.stages[name] = StageRecord()
+        self.save()
 
     @property
     def is_done(self) -> bool:
@@ -85,6 +95,7 @@ class Job:
         seed: int,
         name: str | None = None,
         parts: bool = False,
+        upright: bool = True,
     ) -> Job:
         if not image.is_file():
             raise JobError(f"no existe la imagen {image}")
@@ -100,6 +111,7 @@ class Job:
             stages={stage: StageRecord() for stage in STAGES},
             name=name or image.stem,
             parts=parts,
+            upright=upright,
             root=ws.jobs_dir,
         )
         job.dir.mkdir(parents=True)

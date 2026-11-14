@@ -342,6 +342,7 @@ class THREEDAI_OT_generate(bpy.types.Operator):
             seed=random.randrange(2**31) if props.random_seed else props.seed,
             name=props.object_name.strip() or None,
             parts=props.split_parts,
+            upright=props.upright,
         )
         blender = Path(bpy.app.binary_path)
         rt.refresh()

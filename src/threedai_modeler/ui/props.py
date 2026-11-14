@@ -56,6 +56,11 @@ class THREEDAI_Props(bpy.types.PropertyGroup):
         description="Divide el modelo en partes (P3-SAM); cada parte es un objeto",
         default=False,
     )
+    upright: BoolProperty(
+        name="Enderezar",
+        description="Gira el modelo si sale inclinado respecto al suelo (fotos desde arriba)",
+        default=True,
+    )
     object_name: StringProperty(
         name="Nombre", description="Nombre del objeto (vacío: el nombre de la imagen)"
     )

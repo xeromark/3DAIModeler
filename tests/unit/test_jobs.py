@@ -51,3 +51,16 @@ def test_missing_image(tmp_path: Path) -> None:
     ws = Workspace(tmp_path)
     with pytest.raises(JobError):
         Job.create(ws, tmp_path / "x.png", model_id="m", quality="q", target_faces=1, seed=1)
+
+
+def test_reset_from_clears_later_stages(tmp_path: Path) -> None:
+    ws, job = make_job(tmp_path)
+    for record in job.stages.values():
+        record.status = StageStatus.DONE
+    job.reset_from("parts")
+    loaded = Job.load(ws, job.id)
+    assert loaded.stages["generate"].status is StageStatus.DONE
+    assert loaded.stages["parts"].status is StageStatus.PENDING
+    assert loaded.stages["postprocess"].status is StageStatus.PENDING
+    with pytest.raises(JobError):
+        job.reset_from("nada")

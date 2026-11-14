@@ -125,12 +125,16 @@ def cmd_generate(ws: Workspace, reg: Registry, args: argparse.Namespace) -> int:
         seed=args.seed if args.seed is not None else random.randrange(2**31),
         name=args.name,
         parts=args.parts,
+        upright=not args.no_upright,
     )
     return _run_job(ws, reg, job)
 
 
 def cmd_resume(ws: Workspace, reg: Registry, args: argparse.Namespace) -> int:
-    return _run_job(ws, reg, Job.load(ws, args.job))
+    job = Job.load(ws, args.job)
+    if args.from_stage:
+        job.reset_from(args.from_stage)
+    return _run_job(ws, reg, job)
 
 
 def cmd_jobs(ws: Workspace, _reg: Registry, _args: argparse.Namespace) -> int:
@@ -157,6 +161,82 @@ def cmd_preview(ws: Workspace, _reg: Registry, args: argparse.Namespace) -> int:
     return 0
 
 
+def _render(ws: Workspace, src: Path, out: Path, color_parts: bool = False) -> None:
+    args = [str(src), str(out), "512"] + (["--color-parts"] if color_parts else [])
+    run_worker(find_blender(), ws.worker_dir / "render_preview.py", args, timeout=600)
+
+
+def cmd_bench(ws: Workspace, reg: Registry, args: argparse.Namespace) -> int:
+    """Genera cada imagen con los mismos parámetros y escribe un informe comparable."""
+    presets = Presets.load(ws.presets_file)
+    faces = presets.resolve_faces(args.faces)
+    model_id = args.model or (reg.default_model() or reg.model("pixal3d-int8")).id
+    date = time.strftime("%Y-%m-%d")
+    out_dir = ws.engine_dir / "bench" / f"{date}-{args.label}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for image in map(Path, args.images):
+        print(f"\n=== {image.name}")
+        job = Job.create(
+            ws,
+            image,
+            model_id=model_id,
+            quality=args.quality,
+            target_faces=faces,
+            seed=args.seed,
+            name=image.stem,
+            parts=args.parts,
+        )
+        code = _run_job(ws, reg, job)
+        row: dict[str, object] = {"image": image.name, "job": job.id, "ok": code == 0}
+        if code == 0:
+            gen = job.stages["generate"].metrics
+            parts = job.stages["parts"].metrics
+            post = job.stages["postprocess"].metrics
+            row.update(
+                seconds=gen.get("seconds"),
+                parts_seconds=parts.get("seconds", 0),
+                peak_ram=gen.get("peak_ram_gib"),
+                peak_vram=max(gen.get("peak_vram_gib", 0), parts.get("peak_vram_gib", 0)),
+                faces=post.get("faces"),
+                objects=len(post.get("objects", [])),
+            )
+            blend = job.output_path("postprocess", "blend")
+            glb = job.output_path("generate", "glb")
+            try:
+                if glb is not None:
+                    _render(ws, glb, out_dir / f"{image.stem}.png")
+                if args.parts and blend is not None:
+                    _render(ws, blend, out_dir / f"{image.stem}_partes.png", color_parts=True)
+            except (BlenderNotFoundError, WorkerError) as err:
+                print(f"Aviso: no se pudo renderizar: {err}", file=sys.stderr)
+        rows.append(row)
+
+    lines = [
+        f"# Benchmark {date} — {args.label}",
+        "",
+        f"Modelo `{model_id}` · calidad `{args.quality}` · {faces} caras · semilla {args.seed}"
+        + (" · con partes" if args.parts else ""),
+        "",
+        "| Imagen | Generar | Partes | Pico RAM* | Pico VRAM | Caras | Objetos |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        if not r["ok"]:
+            lines.append(f"| {r['image']} | falló (trabajo {r['job']}) | | | | | |")
+            continue
+        lines.append(
+            f"| {r['image']} | {r['seconds']} s | {r['parts_seconds']} s | {r['peak_ram']} GiB "
+            f"| {r['peak_vram']} GiB | {r['faces']} | {r['objects']} |"
+        )
+    previews = out_dir.relative_to(ws.root)
+    lines += ["", "\\* RAM usada por todo el sistema.", "", f"Vistas previas: `{previews}/`"]
+    report = ws.root / "docs" / "benchmarks" / f"{date}-{args.label}.md"
+    report.write_text("\n".join(lines) + "\n")
+    print(f"\nInforme: {report}")
+    return 0 if all(r["ok"] for r in rows) else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="threedai_modeler")
     sub = parser.add_subparsers(dest="group", required=True)
@@ -178,13 +258,25 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--seed", type=int)
     gen.add_argument("--name", help="nombre del objeto en Blender (por defecto, el de la imagen)")
     gen.add_argument("--parts", action="store_true", help="separar el modelo en partes (P3-SAM)")
+    gen.add_argument("--no-upright", action="store_true", help="no enderezar el modelo")
     gen.set_defaults(fn=cmd_generate)
 
     res = sub.add_parser("resume", help="reanudar un trabajo interrumpido")
     res.add_argument("job")
+    res.add_argument("--from", dest="from_stage", help="repetir desde esta etapa y las siguientes")
     res.set_defaults(fn=cmd_resume)
 
     sub.add_parser("jobs", help="listar trabajos").set_defaults(fn=cmd_jobs)
+
+    bench = sub.add_parser("bench", help="generar un set de imágenes y escribir un informe")
+    bench.add_argument("images", nargs="+")
+    bench.add_argument("--label", default="bench", help="nombre del informe")
+    bench.add_argument("--model")
+    bench.add_argument("--quality", default="standard")
+    bench.add_argument("--faces", default="medium")
+    bench.add_argument("--seed", type=int, default=42)
+    bench.add_argument("--parts", action="store_true")
+    bench.set_defaults(fn=cmd_bench)
 
     prev = sub.add_parser("preview", help="renderizar 4 vistas del resultado con Blender")
     prev.add_argument("job")

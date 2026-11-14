@@ -194,6 +194,8 @@ class Pipeline:
         labels = job.output_path("parts", "labels")
         if job.parts and labels is not None and labels.is_file():
             args += ["--parts", str(labels)]
+        if not job.upright:
+            args.append("--no-upright")
         started = time.monotonic()
         result = run_worker(self.blender, self.ws.worker_dir / "postprocess.py", args, timeout=1800)
         line = next((ln for ln in result.stdout.splitlines() if ln.startswith("RESULT ")), None)

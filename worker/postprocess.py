@@ -11,15 +11,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
+import bmesh
 import bpy
 import numpy as np
 from mathutils import Matrix, Vector
 from mathutils.kdtree import KDTree
 
 FACE_TOLERANCE = 0.05
+UPRIGHT_MAX_TILT = 40.0
+"""Solo se corrigen inclinaciones de hasta estos grados (más sería adivinar)."""
+UPRIGHT_MIN_BASE = 0.08
+"""La base de apoyo debe ser al menos esta fracción de la superficie de la envolvente."""
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,6 +36,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--name", default="Modelo")
     parser.add_argument("--target-faces", type=int, default=0)
     parser.add_argument("--parts", type=Path, help="npz de parts_segment.py (centers, labels)")
+    parser.add_argument(
+        "--no-upright", dest="upright", action="store_false", help="no enderezar el modelo"
+    )
     return parser.parse_args(argv)
 
 
@@ -75,6 +84,57 @@ def origin_to_bottom_center(objects: list[bpy.types.Object]) -> None:
     for obj in objects:
         to_world = obj.matrix_world.copy()
         obj.data.transform(to_world.inverted() @ Matrix.Translation(-pivot) @ to_world)
+
+
+def auto_upright(objects: list[bpy.types.Object]) -> dict[str, float]:
+    """Endereza modelos que salen inclinados (Pixal3D sigue la cámara de la imagen).
+
+    Busca en la envolvente convexa la base de apoyo más grande que mire hacia abajo (caras
+    casi coplanares agrupadas) y la gira hasta quedar horizontal. Si no hay una base clara
+    (p. ej. un hacha flotando) no hace nada.
+    """
+    bm = bmesh.new()
+    for obj in objects:
+        for v in obj.data.vertices:
+            bm.verts.new(obj.matrix_world @ v.co)
+    bmesh.ops.convex_hull(bm, input=list(bm.verts))
+    down = Vector((0.0, 0.0, -1.0))
+    total = sum(f.calc_area() for f in bm.faces) or 1.0
+    candidates = sorted(
+        (
+            (f.calc_area(), f.normal.copy())
+            for f in bm.faces
+            if f.normal.angle(down) < math.radians(UPRIGHT_MAX_TILT)
+        ),
+        key=lambda c: -c[0],
+    )
+    bm.free()
+    clusters: list[list] = []  # [área, normal ponderada]
+    for area, normal in candidates:
+        for cluster in clusters:
+            if normal.angle(cluster[1].normalized()) < math.radians(5):
+                cluster[0] += area
+                cluster[1] += normal * area
+                break
+        else:
+            clusters.append([area, normal * area])
+    if not clusters:
+        return {"tilt_deg": 0.0, "base_fraction": 0.0, "applied": False}
+    area, weighted = max(clusters, key=lambda c: c[0])
+    base_normal = weighted.normalized()
+    tilt = math.degrees(base_normal.angle(down))
+    info = {"tilt_deg": round(tilt, 1), "base_fraction": round(area / total, 3), "applied": False}
+    if area / total < UPRIGHT_MIN_BASE or tilt < 1.0:
+        return info
+    rotation = base_normal.rotation_difference(down).to_matrix().to_4x4()
+    lo, hi = world_bounds(objects)
+    center = (lo + hi) / 2
+    pivot = Matrix.Translation(center) @ rotation @ Matrix.Translation(-center)
+    for obj in objects:
+        to_world = obj.matrix_world.copy()
+        obj.data.transform(to_world.inverted() @ pivot @ to_world)
+    info["applied"] = True
+    return info
 
 
 def gltf_to_blender(points: np.ndarray) -> np.ndarray:
@@ -184,6 +244,7 @@ def main() -> None:
     apply_transforms(objects)
     if args.parts is not None and len(objects) == 1:
         objects = split_parts(objects[0], args.parts)
+    upright = auto_upright(objects) if args.upright else {"applied": False}
     origin_to_bottom_center(objects)
     if len(objects) > 1:
         origins_to_centers(objects)
@@ -205,6 +266,7 @@ def main() -> None:
         "faces": faces,
         "target_faces": args.target_faces,
         "faces_within_tolerance": within,
+        "upright": upright,
         "packed_images": packed,
         "materials": material_report(objects),
         "dimensions": [round(v, 4) for v in (hi - lo)],
