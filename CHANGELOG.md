@@ -46,6 +46,10 @@ El proyecto usa [SemVer](https://semver.org/lang/es/).
   idéntico a uno del catálogo, lo instala sin volver a descargarlo. Mover o copiar al proyecto.
 - Agregar desde Hugging Face lista los `.safetensors` del repositorio.
 - La energía de cada trabajo (Wh, medida con `nvidia-smi`) queda en sus métricas.
+- Panel **Estilos** (visualización en Blender, reversible): Anime / Cel shading (bandas de
+  sombra y contorno por casco invertido), Blanco y negro, Colores saturados y Acuarela
+  (compositor con filtro Kuwahara). Intensidad ajustable; se ve en el viewport y en el render, y
+  los modelos importados después toman el estilo activo.
 - Polígonos "Sin reducir": conserva la malla completa del remesh (680 k a 1.6 M caras según
   la calidad), para impresión 3D o esculpir. CLI: `--faces none`.
 

@@ -336,6 +336,31 @@ class THREEDAI_PT_generate_advanced(_Base, bpy.types.Panel):
         self.layout.prop(props, "object_name")
 
 
+class THREEDAI_PT_styles(_Base, bpy.types.Panel):
+    bl_label = "Estilos"
+    bl_parent_id = "THREEDAI_PT_main"
+    bl_options = {"DEFAULT_CLOSED"}  # noqa: RUF012 (atributo de clase que lee Blender)
+
+    def draw(self, context: bpy.types.Context) -> None:
+        props = context.scene.threedai
+        layout = self.layout
+        layout.prop(props, "style", text="")
+        if props.style == "NONE":
+            wrapped(layout, context, "Elige un estilo para cambiar cómo se ve la escena.")
+            return
+        col = layout.column(align=True)
+        col.prop(props, "style_intensity", slider=True)
+        if props.style == "ANIME":
+            col.prop(props, "cel_bands")
+            row = col.row(align=True)
+            row.prop(props, "cel_outline")
+            sub = row.row(align=True)
+            sub.enabled = props.cel_outline
+            sub.prop(props, "outline_thickness", text="")
+            layout.prop(props, "style_apply_to")
+        layout.operator("threedai.style_reset", icon="LOOP_BACK")
+
+
 class THREEDAI_PT_results(_Base, bpy.types.Panel):
     bl_label = "Resultados"
     bl_parent_id = "THREEDAI_PT_main"
@@ -383,5 +408,6 @@ CLASSES = (
     THREEDAI_PT_models,
     THREEDAI_PT_generate,
     THREEDAI_PT_generate_advanced,
+    THREEDAI_PT_styles,
     THREEDAI_PT_results,
 )

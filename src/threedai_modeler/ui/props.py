@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, IntProperty, PointerProperty, StringProperty
+from bpy.props import (
+    BoolProperty,
+    EnumProperty,
+    FloatProperty,
+    IntProperty,
+    PointerProperty,
+    StringProperty,
+)
 
 from . import runtime
+from .styles import STYLE_ITEMS
 
 QUALITY_ITEMS = [
     ("draft", "Borrador", "Rápido, para probar la imagen"),
@@ -21,6 +29,12 @@ FACES_ITEMS = [
     ("none", "Sin reducir", "Malla completa (1 a 2 millones de caras): impresión 3D o esculpir"),
     ("custom", "Personalizada", "Número exacto de caras"),
 ]
+
+
+def _apply_style(_self: object, context: bpy.types.Context) -> None:
+    from . import styles
+
+    styles.apply_style(context)
 
 
 class THREEDAI_Props(bpy.types.PropertyGroup):
@@ -42,6 +56,37 @@ class THREEDAI_Props(bpy.types.PropertyGroup):
     )
     object_name: StringProperty(
         name="Nombre", description="Nombre del objeto (vacío: el nombre de la imagen)"
+    )
+    style: EnumProperty(name="Estilo", items=STYLE_ITEMS, default="NONE", update=_apply_style)
+    style_intensity: FloatProperty(
+        name="Intensidad", default=0.5, min=0.0, max=1.0, subtype="FACTOR", update=_apply_style
+    )
+    style_apply_to: EnumProperty(
+        name="Aplicar a",
+        items=[
+            ("GENERATED", "Modelos generados", "Todos los objetos importados por el addon"),
+            ("SELECTED", "Selección", "Los objetos seleccionados"),
+        ],
+        default="GENERATED",
+        update=_apply_style,
+    )
+    cel_bands: IntProperty(
+        name="Bandas",
+        description="Niveles de sombra",
+        default=3,
+        min=2,
+        max=4,
+        update=_apply_style,
+    )
+    cel_outline: BoolProperty(name="Contorno", default=True, update=_apply_style)
+    outline_thickness: FloatProperty(
+        name="Grosor",
+        description="Grosor del contorno, relativo al tamaño del objeto",
+        default=0.006,
+        min=0.001,
+        max=0.03,
+        precision=3,
+        update=_apply_style,
     )
     show_unsupported: BoolProperty(
         name="Mostrar modelos sin soporte",

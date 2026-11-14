@@ -17,7 +17,7 @@ from ..core.pipeline import PARTS_MODEL, Pipeline, Progress
 from ..core.registry import APPROVED_ORGS, ModelState, fetch_hf_file, list_hf_safetensors
 from ..core.tasks import Task, TaskBusyError, TaskContext, TaskStatus
 from ..core.workflows import BUILDERS
-from . import prefs, runtime
+from . import prefs, runtime, styles
 
 
 def _start(op: bpy.types.Operator, kind: str, title: str, fn: Any, on_done: Any = None) -> set[str]:
@@ -317,11 +317,14 @@ def import_job(context: bpy.types.Context, job: Job) -> list[bpy.types.Object]:
         obj.select_set(False)
     objects = [o for o in dst.objects if o is not None]
     for obj in objects:
+        obj[styles.JOB_KEY] = job.id
         collection.objects.link(obj)
         obj.location = context.scene.cursor.location
         obj.select_set(True)
     if objects:
         context.view_layer.objects.active = objects[0]
+    if context.scene.threedai.style != "NONE":
+        styles.apply_style(context)  # el modelo nuevo toma el estilo activo
     return objects
 
 
@@ -461,6 +464,16 @@ class THREEDAI_OT_job_resume(bpy.types.Operator):
         blender = Path(bpy.app.binary_path)
         work = _generation_work(job, blender)
         return _start(self, "generate", f"Reanudar {job.name}", work, _on_generated)
+
+
+class THREEDAI_OT_style_reset(bpy.types.Operator):
+    bl_idname = "threedai.style_reset"
+    bl_label = "Quitar estilo"
+    bl_description = "Vuelve al aspecto original (materiales y compositor como estaban)"
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        context.scene.threedai.style = "NONE"  # el update deshace todo
+        return {"FINISHED"}
 
 
 class THREEDAI_OT_dismiss_error(bpy.types.Operator):
@@ -622,6 +635,7 @@ CLASSES = (
     THREEDAI_OT_job_import,
     THREEDAI_OT_job_resume,
     THREEDAI_OT_dismiss_error,
+    THREEDAI_OT_style_reset,
     THREEDAI_OT_select_model,
     THREEDAI_OT_model_import_file,
     THREEDAI_OT_job_open_folder,
