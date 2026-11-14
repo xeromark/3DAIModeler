@@ -155,6 +155,9 @@ class Registry:
     def default_model(self) -> ModelSpec | None:
         return next((m for m in self.models.values() if m.default), None)
 
+    def models_of_family(self, family: str) -> list[ModelSpec]:
+        return [m for m in self.models.values() if m.family == family]
+
     def files_of(self, model_id: str) -> list[FileSpec]:
         return [self.files[f] for f in self.model(model_id).files]
 

@@ -6,6 +6,9 @@ import tomllib
 from dataclasses import dataclass, fields
 from pathlib import Path
 
+MAX_TEXTURE = 8192
+"""Tope de los nodos de horneado y desplegado de UVs del motor."""
+
 
 class PresetError(ValueError):
     """Preset desconocido o inválido."""
@@ -32,6 +35,9 @@ class Quality:
             value = getattr(self, f.name)
             if isinstance(value, int) and value <= 0:
                 raise PresetError(f"{self.name}: {f.name} debe ser > 0")
+        for size in ("texture_size", "normal_size", "ao_size"):
+            if getattr(self, size) > MAX_TEXTURE:
+                raise PresetError(f"{self.name}: {size} no puede superar {MAX_TEXTURE}")
 
 
 @dataclass(frozen=True)

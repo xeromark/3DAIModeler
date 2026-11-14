@@ -39,7 +39,7 @@ def test_presets_load(presets: Presets) -> None:
         presets.resolve_faces(10)
 
 
-@pytest.mark.parametrize("family", ["pixal3d", "trellis2"])
+@pytest.mark.parametrize("family", ["pixal3d", "trellis2", "pixal3d-multiview"])
 def test_template_links_point_to_existing_nodes(family: str) -> None:
     wf = load_template(WORKFLOWS, family, "image_to_mesh")
     for node_id, node in wf.items():
@@ -49,7 +49,11 @@ def test_template_links_point_to_existing_nodes(family: str) -> None:
                 assert value[0] in wf, f"{node_id}.{name} -> {value[0]} no existe"
 
 
-FAMILY_MODELS = [("pixal3d", "pixal3d-int8"), ("trellis2", "trellis2-int8")]
+FAMILY_MODELS = [
+    ("pixal3d", "pixal3d-int8"),
+    ("trellis2", "trellis2-int8"),
+    ("pixal3d-multiview", "pixal3d-multiview-int8"),
+]
 
 
 @pytest.mark.parametrize(("family", "model_id"), FAMILY_MODELS)
@@ -95,9 +99,40 @@ def test_set_input_rejects_links_and_unknown() -> None:
         set_input(wf, "zzz", "v", 3)
 
 
-def test_unsupported_family(registry: Registry, presets: Presets) -> None:
-    params = GenerationParams("a.png", "pixal3d-multiview-int8", presets.get_quality("draft"), 1, 1)
-    with pytest.raises(WorkflowError, match="sin adaptador"):
+def test_views_require_multiview_model(registry: Registry, presets: Presets) -> None:
+    params = GenerationParams(
+        "a.png", "pixal3d-int8", presets.get_quality("draft"), 1000, 1, views={"back": "b.png"}
+    )
+    with pytest.raises(WorkflowError, match="multivista"):
+        build_workflow(WORKFLOWS, registry, params)
+
+
+def test_multiview_keeps_only_given_views(registry: Registry, presets: Presets) -> None:
+    params = GenerationParams(
+        "f.png",
+        "pixal3d-multiview-int8",
+        presets.get_quality("draft"),
+        1000,
+        1,
+        views={"back": "b.png"},
+    )
+    wf = build_workflow(WORKFLOWS, registry, params)
+    cond = wf["conditioning"]["inputs"]
+    assert set(cond) == {"clip_vision_model", "fov", "front", "back"}
+    assert wf["load_image_front"]["inputs"]["image"] == "f.png"
+    assert wf["load_image_back"]["inputs"]["image"] == "b.png"
+    assert "load_image_left" not in wf and "crop_right" not in wf
+    for node in wf.values():
+        for value in node["inputs"].values():
+            if isinstance(value, list):
+                assert value[0] in wf
+
+
+def test_multiview_rejects_unknown_view(registry: Registry, presets: Presets) -> None:
+    params = GenerationParams(
+        "f.png", "pixal3d-multiview-int8", presets.get_quality("draft"), 1, 1, views={"top": "t"}
+    )
+    with pytest.raises(WorkflowError, match="desconocidas"):
         build_workflow(WORKFLOWS, registry, params)
 
 

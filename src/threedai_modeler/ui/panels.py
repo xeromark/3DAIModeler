@@ -265,7 +265,8 @@ class THREEDAI_PT_generate(_Base, bpy.types.Panel):
         props = context.scene.threedai
         layout = self.layout
 
-        layout.prop(props, "image", text="")
+        views = props.extra_views()
+        layout.prop(props, "image", text="Frente" if views else "")
         image = Path(bpy.path.abspath(props.image)) if props.image else None
         if image is not None and image.is_file():
             layout.template_icon(icon_value=previews.icon(image), scale=6.0)
@@ -276,7 +277,7 @@ class THREEDAI_PT_generate(_Base, bpy.types.Panel):
         if props.faces == "custom":
             col.prop(props, "faces_custom")
 
-        model_id = prefs.generation_model_id(context)
+        model_id = prefs.effective_model_id(context)
         est = estimate(rt.all_jobs, model_id, props.quality, props.split_parts)
         if est is not None:
             sub = layout.row()
@@ -290,7 +291,16 @@ class THREEDAI_PT_generate(_Base, bpy.types.Panel):
         row.prop(props, "upright")
 
         ready = rt.model_states.get(model_id) is ModelState.INSTALLED
-        if not ready:
+        if not ready and views:
+            box = layout.box()
+            wrapped(box, context, "Varias vistas usan el modelo Pixal3D multivista.", icon="INFO")
+            if model_id:
+                missing = rt.registry.missing_bytes(rt.ws, model_id) / 1e9
+                op = box.operator(
+                    "threedai.model_download", text=f"Descargar ({missing:.1f} GB)", icon="IMPORT"
+                )
+                op.model_id = model_id
+        elif not ready:
             wrapped(layout, context, "Descarga el modelo de generación en Motor.", icon="INFO")
         if props.split_parts and not self._parts_ready(layout, context):
             ready = False
@@ -319,6 +329,35 @@ class THREEDAI_PT_generate(_Base, bpy.types.Panel):
         if ok:
             wrapped(box, context, "Licencia Hunyuan 3D-Part: no válida en UE, UK ni Corea.")
         return ok
+
+
+class THREEDAI_PT_generate_views(_Base, bpy.types.Panel):
+    bl_label = "Vistas adicionales"
+    bl_parent_id = "THREEDAI_PT_generate"
+    bl_options = {"DEFAULT_CLOSED"}  # noqa: RUF012 (atributo de clase que lee Blender)
+
+    def draw_header(self, context: bpy.types.Context) -> None:
+        count = len(context.scene.threedai.extra_views())
+        if count:
+            self.layout.label(text=f"({count})")
+
+    def draw(self, context: bpy.types.Context) -> None:
+        props = context.scene.threedai
+        layout = self.layout
+        wrapped(
+            layout,
+            context,
+            "Opcional. Misma pose y escala que el frente; mejora la espalda y los costados.",
+        )
+        row = layout.row()
+        for view in ("left", "back", "right"):
+            col = row.column(align=True)
+            value = getattr(props, f"view_{view}")
+            path = Path(bpy.path.abspath(value)) if value else None
+            if path is not None and path.is_file():
+                col.template_icon(icon_value=previews.icon(path), scale=3.0)
+            col.prop(props, f"view_{view}", text="")
+            col.label(text={"left": "Izquierda", "back": "Espalda", "right": "Derecha"}[view])
 
 
 class THREEDAI_PT_generate_advanced(_Base, bpy.types.Panel):
@@ -385,6 +424,8 @@ class THREEDAI_PT_results(_Base, bpy.types.Panel):
             info = f"{job.quality} · {faces}"
             if job.parts:
                 info += " · partes"
+            if job.views:
+                info += f" · {len(job.views) + 1} vistas"
             sub = col.row()
             sub.scale_y = 0.75
             sub.label(text=info if job.is_done else f"{info} · incompleto")
@@ -407,6 +448,7 @@ CLASSES = (
     THREEDAI_PT_engine,
     THREEDAI_PT_models,
     THREEDAI_PT_generate,
+    THREEDAI_PT_generate_views,
     THREEDAI_PT_generate_advanced,
     THREEDAI_PT_styles,
     THREEDAI_PT_results,

@@ -372,7 +372,7 @@ hoja + cabeza) en ~45 s extra con 6.4 GiB de VRAM; probado desde la CLI y desde 
 
 ### M6 — Calidad
 
-- Multivista con Pixal3D (RF-02).
+- [x] Multivista con Pixal3D (RF-02): frente + izquierda/espalda/derecha opcionales.
 - Varias semillas con previews y elección en el panel (RF-15).
 - Upscale de texturas a 4K.
 - Presets `draft` / `standard` / `max`, ajustados con el benchmark.

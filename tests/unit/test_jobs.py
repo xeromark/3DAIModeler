@@ -97,3 +97,27 @@ def test_estimate_uses_matching_finished_jobs(tmp_path: Path) -> None:
     with_parts = estimate(jobs, "m", "draft", parts=True)
     assert with_parts is not None and with_parts.seconds == 140.0
     assert estimate(jobs, "m", "max", parts=False) is None
+
+
+def test_create_copies_extra_views(tmp_path: Path) -> None:
+    ws = Workspace(tmp_path)
+    front = tmp_path / "f.png"
+    back = tmp_path / "espalda.JPG"
+    front.write_bytes(b"f")
+    back.write_bytes(b"b")
+    job = Job.create(
+        ws, front, model_id="m", quality="q", target_faces=1, seed=1, views={"back": back}
+    )
+    assert job.views == {"back": "view_back.jpg"}
+    assert (job.dir / "view_back.jpg").read_bytes() == b"b"
+    assert Job.load(ws, job.id).views == job.views
+    with pytest.raises(JobError, match="vista back"):
+        Job.create(
+            ws,
+            front,
+            model_id="m",
+            quality="q",
+            target_faces=1,
+            seed=1,
+            views={"back": tmp_path / "no.png"},
+        )

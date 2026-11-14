@@ -26,6 +26,7 @@ from .core.paths import Workspace
 from .core.pipeline import Pipeline, PipelineError, Progress
 from .core.presets import Presets
 from .core.registry import Registry
+from .core.workflows import EXTRA_VIEWS, MULTIVIEW_FAMILY
 
 
 def _gb(n: int) -> str:
@@ -111,7 +112,10 @@ def _run_job(ws: Workspace, reg: Registry, job: Job) -> int:
 def cmd_generate(ws: Workspace, reg: Registry, args: argparse.Namespace) -> int:
     presets = Presets.load(ws.presets_file)
     presets.get_quality(args.quality)
+    views = {v: Path(getattr(args, v)) for v in EXTRA_VIEWS if getattr(args, v)}
     default = reg.default_model()
+    if views and not args.model:  # varias vistas: modelo multivista
+        default = next(iter(reg.models_of_family(MULTIVIEW_FAMILY)), None)
     model_id = args.model or (default.id if default else None)
     if model_id is None:
         print("Error: no hay modelo por defecto; usa --model", file=sys.stderr)
@@ -127,6 +131,7 @@ def cmd_generate(ws: Workspace, reg: Registry, args: argparse.Namespace) -> int:
         name=args.name,
         parts=args.parts,
         upright=not args.no_upright,
+        views=views,
     )
     return _run_job(ws, reg, job)
 
@@ -263,6 +268,8 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--name", help="nombre del objeto en Blender (por defecto, el de la imagen)")
     gen.add_argument("--parts", action="store_true", help="separar el modelo en partes (P3-SAM)")
     gen.add_argument("--no-upright", action="store_true", help="no enderezar el modelo")
+    for view, label in (("left", "izquierda"), ("back", "espalda"), ("right", "derecha")):
+        gen.add_argument(f"--{view}", help=f"imagen de la vista {label} (usa el modelo multivista)")
     gen.set_defaults(fn=cmd_generate)
 
     res = sub.add_parser("resume", help="reanudar un trabajo interrumpido")

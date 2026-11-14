@@ -55,6 +55,8 @@ class Job:
     """Separar el modelo en partes (P3-SAM)."""
     upright: bool = True
     """Enderezar el modelo si sale inclinado (ver worker/postprocess.py)."""
+    views: dict[str, str] = field(default_factory=dict)
+    """Vistas adicionales (left/back/right) -> archivo dentro de la carpeta del trabajo."""
     root: Path = field(default=Path(), repr=False, compare=False)
 
     @property
@@ -96,9 +98,14 @@ class Job:
         name: str | None = None,
         parts: bool = False,
         upright: bool = True,
+        views: dict[str, Path] | None = None,
     ) -> Job:
         if not image.is_file():
             raise JobError(f"no existe la imagen {image}")
+        views = views or {}
+        for view, path in views.items():
+            if not path.is_file():
+                raise JobError(f"no existe la imagen de la vista {view}: {path}")
         job_id = time.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(2)
         job = cls(
             id=job_id,
@@ -112,10 +119,13 @@ class Job:
             name=name or image.stem,
             parts=parts,
             upright=upright,
+            views={v: f"view_{v}{p.suffix.lower()}" for v, p in views.items()},
             root=ws.jobs_dir,
         )
         job.dir.mkdir(parents=True)
         shutil.copy2(image, job.input_path)
+        for view, path in views.items():
+            shutil.copy2(path, job.dir / job.views[view])
         job.save()
         return job
 

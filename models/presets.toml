@@ -29,16 +29,16 @@ normal_size = 2048
 ao_size = 1024
 
 [quality.max]
-description = "Máxima calidad, sin importar el tiempo"
+description = "Todo al máximo, sin importar el tiempo (texturas 8K)"
 structure_steps = 20
 shape_steps = 30
 upsample_steps = 20
 texture_steps = 20
 upsample_resolution = 2048
 remesh_resolution = 1024
-texture_size = 4096
+texture_size = 8192
 normal_size = 4096
-ao_size = 2048
+ao_size = 4096
 
 # Caras (triángulos) del modelo final. "none" = sin reducir (se conserva la malla del remesh).
 [polycount]

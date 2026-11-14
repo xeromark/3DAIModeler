@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import bpy
 from bpy.props import (
     BoolProperty,
@@ -18,7 +20,7 @@ from .styles import STYLE_ITEMS
 QUALITY_ITEMS = [
     ("draft", "Borrador", "Rápido, para probar la imagen"),
     ("standard", "Estándar", "Valores de la plantilla oficial"),
-    ("max", "Máxima", "Máxima calidad, sin importar el tiempo"),
+    ("max", "Máxima", "Todo al máximo (texturas 8K), sin importar el tiempo"),
 ]
 
 FACES_ITEMS = [
@@ -39,6 +41,9 @@ def _apply_style(_self: object, context: bpy.types.Context) -> None:
 
 class THREEDAI_Props(bpy.types.PropertyGroup):
     image: StringProperty(name="Imagen", subtype="FILE_PATH")
+    view_left: StringProperty(name="Izquierda", subtype="FILE_PATH")
+    view_back: StringProperty(name="Espalda", subtype="FILE_PATH")
+    view_right: StringProperty(name="Derecha", subtype="FILE_PATH")
     quality: EnumProperty(name="Calidad", items=QUALITY_ITEMS, default="standard")
     faces: EnumProperty(name="Polígonos", items=FACES_ITEMS, default="medium")
     faces_custom: IntProperty(name="Caras", default=30_000, min=100, max=5_000_000, step=1000)
@@ -93,6 +98,15 @@ class THREEDAI_Props(bpy.types.PropertyGroup):
         description="Incluye modelos del catálogo que la app aún no puede usar",
         default=False,
     )
+
+    def extra_views(self) -> dict[str, Path]:
+        """Vistas adicionales cargadas: left/back/right -> ruta."""
+        views = {}
+        for view in ("left", "back", "right"):
+            value = getattr(self, f"view_{view}")
+            if value:
+                views[view] = Path(bpy.path.abspath(value))
+        return views
 
     def target_faces(self) -> int:
         presets = runtime.get().presets

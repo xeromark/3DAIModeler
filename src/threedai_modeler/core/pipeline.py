@@ -141,12 +141,17 @@ class Pipeline:
 
         report("Subiendo imagen")
         image = self.client.upload_image(job.input_path, name=f"{job.id}{job.input_path.suffix}")
+        views = {
+            view: self.client.upload_image(job.dir / name, name=f"{job.id}_{name}")
+            for view, name in job.views.items()
+        }
         params = GenerationParams(
             image=image,
             model_id=job.model_id,
             quality=self.presets.get_quality(job.quality),
             target_faces=job.target_faces,
             seed=job.seed,
+            views=views,
         )
         workflow = build_workflow(self.ws.workflows_dir, self.registry, params)
         set_input(workflow, "save", "filename_prefix", f"threedai/{job.id}")

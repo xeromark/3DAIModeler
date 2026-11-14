@@ -60,3 +60,16 @@ def generation_model_id(context: bpy.types.Context | None = None) -> str:
         return chosen
     default = registry.default_model()
     return default.id if default else ""
+
+
+def effective_model_id(context: bpy.types.Context | None = None) -> str:
+    """Modelo que se usará al generar: el multivista si hay vistas adicionales."""
+    from ..core.workflows import MULTIVIEW_FAMILY
+    from . import runtime
+
+    ctx = context or bpy.context
+    if ctx.scene.threedai.extra_views():
+        registry = runtime.get().registry
+        candidates = registry.models_of_family(MULTIVIEW_FAMILY)
+        return candidates[0].id if candidates else ""
+    return generation_model_id(ctx)

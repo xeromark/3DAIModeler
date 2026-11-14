@@ -336,10 +336,15 @@ class THREEDAI_OT_generate(bpy.types.Operator):
     def execute(self, context: bpy.types.Context) -> set[str]:
         rt = runtime.get()
         props = context.scene.threedai
-        model_id = prefs.generation_model_id(context)
+        model_id = prefs.effective_model_id(context)
+        views = props.extra_views()
         image = Path(bpy.path.abspath(props.image))
         if not image.is_file():
-            self.report({"ERROR"}, "Elige una imagen")
+            self.report({"ERROR"}, "Elige una imagen (frente)")
+            return {"CANCELLED"}
+        missing = [v for v, path in views.items() if not path.is_file()]
+        if missing:
+            self.report({"ERROR"}, f"No existe la imagen de la vista: {', '.join(missing)}")
             return {"CANCELLED"}
         if not model_id or rt.registry.state(rt.ws, model_id) is not ModelState.INSTALLED:
             self.report({"ERROR"}, "Descarga el modelo primero")
@@ -372,6 +377,7 @@ class THREEDAI_OT_generate(bpy.types.Operator):
             name=props.object_name.strip() or None,
             parts=props.split_parts,
             upright=props.upright,
+            views=views,
         )
         blender = Path(bpy.app.binary_path)
         rt.refresh()
