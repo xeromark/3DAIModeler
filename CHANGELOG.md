@@ -22,3 +22,7 @@ El proyecto usa [SemVer](https://semver.org/lang/es/).
 - Render de vistas previas con Blender en background (`worker/render_preview.py`).
 - Etapa `postprocess`: GLB -> `.blend` con texturas empaquetadas, objeto nombrado, origen en la
   base y verificación de polígonos (`worker/postprocess.py`).
+- Addon de Blender (pestaña 3DAI): motor (instalar/iniciar/detener/logs), generación con
+  progreso y cancelación, descarga de modelos, resultados (importar/reanudar).
+- `core/engine.py` (Runner Docker + EngineManager) y `core/tasks.py` (tareas en hilos de fondo).
+- `scripts/install-addon.sh`: instala el addon como repositorio local que apunta a `src/`.

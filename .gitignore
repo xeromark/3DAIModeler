@@ -7,3 +7,6 @@ __pycache__/
 *.blend1
 
 .venv/
+
+# Índice que Blender crea en un repositorio local de extensiones
+/src/.blender_ext/

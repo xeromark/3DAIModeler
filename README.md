@@ -62,6 +62,17 @@ imagen de Docker (~1 GB en `/var/lib/docker`).
 ./scripts/engine.sh down
 ```
 
+## Addon de Blender
+
+```bash
+./scripts/install-addon.sh             # con Blender cerrado
+./scripts/install-addon.sh uninstall
+```
+
+En Blender: Viewport 3D → barra lateral (`N`) → pestaña **3DAI**. Desde ahí se instala, inicia y
+detiene el motor, se descargan modelos y se genera. El código no se copia fuera del proyecto: el
+addon se carga desde `src/` como repositorio local de extensiones.
+
 ## Desarrollo
 
 ```bash

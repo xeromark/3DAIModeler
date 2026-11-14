@@ -114,7 +114,8 @@ NOT_INSTALLED ──install──▶ INSTALLING ──ok──▶ STOPPED ──
                              ERROR ◀──fallo─────┴──────────── STOPPING ◀──stop───── BUSY ────┘
 ```
 
-- `EngineManager` expone `status()`, `install()`, `start()`, `stop()`, `logs()`, `free_memory()`.
+- `EngineManager` (`core/engine.py`) expone `status()`, `install()`, `start()`, `stop()`;
+  los logs y la liberación de memoria están en `Runner.logs()` y `ComfyClient.free()`.
 - `Runner` es una interfaz con dos implementaciones:
   - `DockerRunner`: usa `docker compose -f <workspace>/compose.yaml ...`. Es la implementación actual.
   - `NativeRunner`: `uv` + `bwrap`. Es futura y cumple RNF-08.
@@ -319,14 +320,19 @@ El pico de RAM cumple RNF-01 y queda medido.
 **Aceptación:** los polígonos quedan dentro de ±5 % del objetivo. El `.blend` abre con texturas
 empaquetadas. La comparación visual entre alta y baja queda registrada en el benchmark.
 
-### M3 — Addon MVP
+### M3 — Addon MVP *(en curso)*
 
-- Extensión con su manifiesto e instalación por repositorio local.
-- Panel **Motor:** Instalar / Iniciar / Detener, estado, logs y uso de disco.
-- Panel **Generar:** imagen, preset de calidad, polígonos y botón Generar con progreso por etapa.
-  Incluye cancelar.
-- Importación del resultado a la escena.
-- Comprobación inicial: Docker disponible desde el Blender de Steam (ver riesgo R5).
+- [x] Extensión con su manifiesto e instalación por repositorio local (`scripts/install-addon.sh`).
+- [x] Panel **Motor:** Instalar / Iniciar / Detener, estado y logs. *(Uso de disco: pasa a M4.)*
+- [x] Panel **Generar:** imagen, modelo, preset de calidad, polígonos, semilla y nombre; botón
+  Generar con progreso por etapa y cancelar; descarga del modelo si falta.
+- [x] Panel **Resultados:** importar trabajos terminados y reanudar los interrumpidos.
+- [x] Importación del resultado a la escena (colección nueva, en el cursor 3D).
+- [x] El motor arranca solo al generar y se detiene al cerrar Blender (configurable).
+- [x] Riesgo R5 descartado: el Blender de Steam ejecuta `docker` sin contenedor de compatibilidad.
+- [x] Prueba de punta a punta del addon en Blender background
+  (`tests/integration/blender_addon_check.py`).
+- [ ] Prueba manual en la interfaz real de Blender (abierto desde Steam).
 
 **Aceptación:** desde un Blender recién abierto se llega a un modelo en escena sin usar la terminal,
 y la interfaz no se congela en ningún momento.
