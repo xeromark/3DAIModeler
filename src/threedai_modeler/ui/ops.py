@@ -14,6 +14,7 @@ from ..core.engine import EngineState
 from ..core.jobs import Job
 from ..core.local_models import ImportMode, import_local
 from ..core.pipeline import PARTS_MODEL, Pipeline, Progress
+from ..core.presets import PresetError, custom_quality, quality_values
 from ..core.registry import APPROVED_ORGS, ModelState, fetch_hf_file, list_hf_safetensors
 from ..core.tasks import Task, TaskBusyError, TaskContext, TaskStatus
 from ..core.workflows import BUILDERS
@@ -361,6 +362,12 @@ class THREEDAI_OT_generate(bpy.types.Operator):
             if not rt.manager.runner.parts_installed():
                 self.report({"ERROR"}, "Instala el soporte de partes primero")
                 return {"CANCELLED"}
+        if props.quality == "custom":
+            try:
+                custom_quality(props.custom_quality())
+            except PresetError as err:
+                self.report({"ERROR"}, str(err))
+                return {"CANCELLED"}
         try:
             target_faces = props.target_faces()
         except ValueError as err:
@@ -378,6 +385,8 @@ class THREEDAI_OT_generate(bpy.types.Operator):
             parts=props.split_parts,
             upright=props.upright,
             views=views,
+            custom_quality=props.custom_quality() if props.quality == "custom" else None,
+            exports=props.exports(),
         )
         blender = Path(bpy.app.binary_path)
         rt.refresh()
@@ -470,6 +479,19 @@ class THREEDAI_OT_job_resume(bpy.types.Operator):
         blender = Path(bpy.app.binary_path)
         work = _generation_work(job, blender)
         return _start(self, "generate", f"Reanudar {job.name}", work, _on_generated)
+
+
+class THREEDAI_OT_quality_from_preset(bpy.types.Operator):
+    bl_idname = "threedai.quality_from_preset"
+    bl_label = "Partir de un preset"
+    bl_description = "Copia los valores de un preset a la calidad personalizada"
+
+    preset: StringProperty()
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        values = quality_values(runtime.get().presets.get_quality(self.preset))
+        context.scene.threedai.load_quality(values)
+        return {"FINISHED"}
 
 
 class THREEDAI_OT_style_reset(bpy.types.Operator):
@@ -642,6 +664,7 @@ CLASSES = (
     THREEDAI_OT_job_resume,
     THREEDAI_OT_dismiss_error,
     THREEDAI_OT_style_reset,
+    THREEDAI_OT_quality_from_preset,
     THREEDAI_OT_select_model,
     THREEDAI_OT_model_import_file,
     THREEDAI_OT_job_open_folder,

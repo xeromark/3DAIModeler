@@ -24,7 +24,7 @@ from .core.engine import DockerRunner, EngineError
 from .core.jobs import Job
 from .core.paths import Workspace
 from .core.pipeline import Pipeline, PipelineError, Progress
-from .core.presets import Presets
+from .core.presets import CUSTOM, Presets, custom_quality, quality_values
 from .core.registry import Registry
 from .core.workflows import EXTRA_VIEWS, MULTIVIEW_FAMILY
 
@@ -111,7 +111,14 @@ def _run_job(ws: Workspace, reg: Registry, job: Job) -> int:
 
 def cmd_generate(ws: Workspace, reg: Registry, args: argparse.Namespace) -> int:
     presets = Presets.load(ws.presets_file)
-    presets.get_quality(args.quality)
+    custom: dict[str, int] = {}
+    if args.quality == CUSTOM:
+        base = quality_values(presets.get_quality(args.base))
+        overrides = dict(item.split("=", 1) for item in args.set)
+        custom = {**base, **{k: int(v) for k, v in overrides.items()}}
+        custom_quality(custom)  # valida
+    else:
+        presets.get_quality(args.quality)
     views = {v: Path(getattr(args, v)) for v in EXTRA_VIEWS if getattr(args, v)}
     default = reg.default_model()
     if views and not args.model:  # varias vistas: modelo multivista
@@ -132,6 +139,8 @@ def cmd_generate(ws: Workspace, reg: Registry, args: argparse.Namespace) -> int:
         parts=args.parts,
         upright=not args.no_upright,
         views=views,
+        custom_quality=custom,
+        exports=[f for f in args.export.split(",") if f],
     )
     return _run_job(ws, reg, job)
 
@@ -260,7 +269,16 @@ def build_parser() -> argparse.ArgumentParser:
     gen = sub.add_parser("generate", help="imagen -> modelo 3D")
     gen.add_argument("image")
     gen.add_argument("--model", help="ID del modelo (por defecto, el marcado con *)")
-    gen.add_argument("--quality", default="standard", help="draft | standard | max")
+    gen.add_argument("--quality", default="standard", help="draft | standard | max | custom")
+    gen.add_argument("--base", default="standard", help="con --quality custom: preset de partida")
+    gen.add_argument(
+        "--set",
+        nargs="*",
+        default=[],
+        metavar="CLAVE=VALOR",
+        help="con --quality custom, p. ej. texture_size=8192 shape_steps=40",
+    )
+    gen.add_argument("--export", default="", help="formatos extra: fbx,obj")
     gen.add_argument(
         "--faces", default="medium", help="low | medium | high | ultra | none | número"
     )

@@ -29,6 +29,8 @@ class Quality:
     ao_size: int
 
     def __post_init__(self) -> None:
+        if not 256 <= self.remesh_resolution <= 2048:
+            raise PresetError(f"{self.name}: remesh_resolution debe estar entre 256 y 2048")
         if self.upsample_resolution not in (1024, 1536, 2048):
             raise PresetError(f"{self.name}: upsample_resolution debe ser 1024, 1536 o 2048")
         for f in fields(self):
@@ -38,6 +40,37 @@ class Quality:
         for size in ("texture_size", "normal_size", "ao_size"):
             if getattr(self, size) > MAX_TEXTURE:
                 raise PresetError(f"{self.name}: {size} no puede superar {MAX_TEXTURE}")
+
+
+CUSTOM = "custom"
+"""Calidad personalizada: los parámetros viajan en el trabajo (Job.custom_quality)."""
+
+QUALITY_FIELDS = (
+    "structure_steps",
+    "shape_steps",
+    "upsample_steps",
+    "texture_steps",
+    "upsample_resolution",
+    "remesh_resolution",
+    "texture_size",
+    "normal_size",
+    "ao_size",
+)
+
+
+def custom_quality(values: dict[str, int]) -> Quality:
+    missing = [f for f in QUALITY_FIELDS if f not in values]
+    if missing:
+        raise PresetError(f"calidad personalizada incompleta: faltan {missing}")
+    return Quality(
+        name=CUSTOM,
+        description="Personalizada",
+        **{f: int(values[f]) for f in QUALITY_FIELDS},
+    )
+
+
+def quality_values(quality: Quality) -> dict[str, int]:
+    return {f: int(getattr(quality, f)) for f in QUALITY_FIELDS}
 
 
 @dataclass(frozen=True)

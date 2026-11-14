@@ -39,6 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--no-upright", dest="upright", action="store_false", help="no enderezar el modelo"
     )
+    parser.add_argument("--export", default="", help="formatos extra separados por coma: fbx,obj")
     return parser.parse_args(argv)
 
 
@@ -135,6 +136,58 @@ def auto_upright(objects: list[bpy.types.Object]) -> dict[str, float]:
         obj.data.transform(to_world.inverted() @ pivot @ to_world)
     info["applied"] = True
     return info
+
+
+def texture_roles() -> dict[str, str]:
+    """Nombre de imagen -> función (color, normal, orm) según cómo se conecta al material."""
+    roles: dict[str, str] = {}
+    for mat in bpy.data.materials:
+        if not mat.use_nodes:
+            continue
+        for link in mat.node_tree.links:
+            if link.from_node.type != "TEX_IMAGE" or link.from_node.image is None:
+                continue
+            target = link.to_node
+            if target.type == "BSDF_PRINCIPLED" and link.to_socket.name == "Base Color":
+                role = "color"
+            elif target.type == "NORMAL_MAP":
+                role = "normal"
+            elif target.type == "SEPARATE_COLOR":
+                role = "orm"  # oclusión (R), rugosidad (G), metálico (B)
+            else:
+                continue
+            roles[link.from_node.image.name] = role
+    return roles
+
+
+def export_formats(blend: Path, formats: list[str]) -> list[str]:
+    """Exporta la escena junto al .blend (mismo nombre, otra extensión)."""
+    done = []
+    if not formats:
+        return done
+    # Las texturas están empaquetadas en el .blend: los exportadores necesitan archivos.
+    # Se guardan junto al modelo con nombres según su función (color, normal, orm).
+    roles = texture_roles()
+    for image in bpy.data.images:
+        if image.packed_file is None:
+            continue
+        role = roles.get(image.name, bpy.path.clean_name(image.name))
+        image.filepath_raw = str(blend.with_name(f"{blend.stem}_{role}.png"))
+        image.file_format = "PNG"
+        image.save()
+    bpy.ops.object.select_all(action="SELECT")
+    for fmt in formats:
+        target = blend.with_suffix(f".{fmt}")
+        if fmt == "fbx":
+            bpy.ops.export_scene.fbx(
+                filepath=str(target), path_mode="COPY", embed_textures=True, use_selection=False
+            )
+        elif fmt == "obj":
+            bpy.ops.wm.obj_export(filepath=str(target), path_mode="RELATIVE", export_materials=True)
+        else:
+            continue
+        done.append(fmt)
+    return done
 
 
 def gltf_to_blender(points: np.ndarray) -> np.ndarray:
@@ -259,7 +312,9 @@ def main() -> None:
         within = abs(faces - args.target_faces) <= args.target_faces * FACE_TOLERANCE
 
     args.blend.parent.mkdir(parents=True, exist_ok=True)
+    bpy.context.preferences.filepaths.save_version = 0  # sin respaldos .blend1
     bpy.ops.wm.save_as_mainfile(filepath=str(args.blend), compress=True)
+    exported = export_formats(args.blend, [f for f in args.export.split(",") if f])
 
     result = {
         "objects": [o.name for o in objects],
@@ -267,6 +322,7 @@ def main() -> None:
         "target_faces": args.target_faces,
         "faces_within_tolerance": within,
         "upright": upright,
+        "exported": exported,
         "packed_images": packed,
         "materials": material_report(objects),
         "dimensions": [round(v, 4) for v in (hi - lo)],

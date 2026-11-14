@@ -159,3 +159,17 @@ def test_no_reduction_skips_decimate(registry: Registry, presets: Presets) -> No
         for value in node["inputs"].values():
             if isinstance(value, list):
                 assert value[0] in wf
+
+
+def test_custom_quality_roundtrip(presets: Presets) -> None:
+    from threedai_modeler.core.presets import custom_quality, quality_values
+
+    values = {**quality_values(presets.get_quality("standard")), "texture_size": 8192}
+    q = custom_quality(values)
+    assert q.texture_size == 8192 and q.name == "custom"
+    with pytest.raises(PresetError, match="faltan"):
+        custom_quality({"texture_size": 1024})
+    with pytest.raises(PresetError, match="8192"):
+        custom_quality({**values, "normal_size": 16384})
+    with pytest.raises(PresetError, match="remesh"):
+        custom_quality({**values, "remesh_resolution": 64})

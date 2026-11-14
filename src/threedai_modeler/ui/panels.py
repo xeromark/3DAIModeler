@@ -286,6 +286,7 @@ class THREEDAI_PT_generate(_Base, bpy.types.Panel):
             text = f"≈ {minutes:.1f} min · hasta {est.peak_vram_gib:.1f} GB VRAM"
             sub.label(text=text, icon="TIME")
 
+        layout.prop(props, "object_name")
         row = layout.row()
         row.prop(props, "split_parts")
         row.prop(props, "upright")
@@ -361,18 +362,54 @@ class THREEDAI_PT_generate_views(_Base, bpy.types.Panel):
 
 
 class THREEDAI_PT_generate_advanced(_Base, bpy.types.Panel):
+    """Solo con calidad Personalizada: todos los parámetros de calidad y exportación."""
+
     bl_label = "Avanzado"
     bl_parent_id = "THREEDAI_PT_generate"
-    bl_options = {"DEFAULT_CLOSED"}  # noqa: RUF012 (atributo de clase que lee Blender)
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return bool(context.scene.threedai.quality == "custom")
 
     def draw(self, context: bpy.types.Context) -> None:
         props = context.scene.threedai
-        row = self.layout.row(align=True)
+        layout = self.layout
+
+        row = layout.row(align=True)
+        row.label(text="Partir de:")
+        for preset, label in (("draft", "Borrador"), ("standard", "Estándar"), ("max", "Máxima")):
+            row.operator("threedai.quality_from_preset", text=label).preset = preset
+
+        col = layout.column(align=True)
+        col.label(text="Pasos de la IA (más = mejor y más lento)")
+        grid = col.grid_flow(columns=2, align=True)
+        for key in ("structure_steps", "shape_steps", "upsample_steps", "texture_steps"):
+            grid.prop(props, f"q_{key}")
+
+        col = layout.column(align=True)
+        col.label(text="Resolución")
+        col.prop(props, "q_upsample_resolution")
+        col.prop(props, "q_remesh_resolution")
+
+        col = layout.column(align=True)
+        col.label(text="Texturas")
+        col.prop(props, "q_texture_size")
+        col.prop(props, "q_normal_size")
+        col.prop(props, "q_ao_size")
+        if int(props.q_normal_size) > 4096 and props.q_remesh_resolution > 768:
+            text = "Normal map 8K con remesh alto puede no caber en 16 GB de VRAM."
+            wrapped(layout, context, text, icon="ERROR")
+
+        row = layout.row(align=True)
         row.prop(props, "random_seed", text="Semilla aleatoria")
         sub = row.row()
         sub.enabled = not props.random_seed
         sub.prop(props, "seed", text="")
-        self.layout.prop(props, "object_name")
+
+        row = layout.row(align=True)
+        row.label(text="Exportar también:")
+        row.prop(props, "export_fbx", toggle=True)
+        row.prop(props, "export_obj", toggle=True)
 
 
 class THREEDAI_PT_styles(_Base, bpy.types.Panel):

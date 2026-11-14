@@ -21,6 +21,11 @@ QUALITY_ITEMS = [
     ("draft", "Borrador", "Rápido, para probar la imagen"),
     ("standard", "Estándar", "Valores de la plantilla oficial"),
     ("max", "Máxima", "Todo al máximo (texturas 8K), sin importar el tiempo"),
+    ("custom", "Personalizada", "Ajusta cada parámetro en Avanzado"),
+]
+
+TEXTURE_ITEMS = [
+    (v, f"{int(v) // 1024}K", f"{v} x {v} píxeles") for v in ("1024", "2048", "4096", "8192")
 ]
 
 FACES_ITEMS = [
@@ -93,6 +98,29 @@ class THREEDAI_Props(bpy.types.PropertyGroup):
         precision=3,
         update=_apply_style,
     )
+    # Calidad personalizada (panel Avanzado)
+    q_structure_steps: IntProperty(name="Estructura", default=12, min=1, max=100)
+    q_shape_steps: IntProperty(name="Forma", default=20, min=1, max=100)
+    q_upsample_steps: IntProperty(name="Detalle", default=12, min=1, max=100)
+    q_texture_steps: IntProperty(name="Textura", default=12, min=1, max=100)
+    q_upsample_resolution: EnumProperty(
+        name="Detalle de la IA",
+        items=[(v, v, f"Cuadrícula de {v} vóxeles") for v in ("1024", "1536", "2048")],
+        default="1536",
+    )
+    q_remesh_resolution: IntProperty(
+        name="Remesh",
+        description="Resolución de la malla limpia (detalle geométrico)",
+        default=768,
+        min=256,
+        max=2048,
+        step=64,
+    )
+    q_texture_size: EnumProperty(name="Color y materiales", items=TEXTURE_ITEMS, default="4096")
+    q_normal_size: EnumProperty(name="Normal map", items=TEXTURE_ITEMS, default="2048")
+    q_ao_size: EnumProperty(name="Oclusión", items=TEXTURE_ITEMS, default="1024")
+    export_fbx: BoolProperty(name="FBX", description="Exportar también .fbx (texturas embebidas)")
+    export_obj: BoolProperty(name="OBJ", description="Exportar también .obj con sus texturas")
     show_unsupported: BoolProperty(
         name="Mostrar modelos sin soporte",
         description="Incluye modelos del catálogo que la app aún no puede usar",
@@ -107,6 +135,30 @@ class THREEDAI_Props(bpy.types.PropertyGroup):
             if value:
                 views[view] = Path(bpy.path.abspath(value))
         return views
+
+    def custom_quality(self) -> dict[str, int]:
+        return {
+            "structure_steps": self.q_structure_steps,
+            "shape_steps": self.q_shape_steps,
+            "upsample_steps": self.q_upsample_steps,
+            "texture_steps": self.q_texture_steps,
+            "upsample_resolution": int(self.q_upsample_resolution),
+            "remesh_resolution": self.q_remesh_resolution,
+            "texture_size": int(self.q_texture_size),
+            "normal_size": int(self.q_normal_size),
+            "ao_size": int(self.q_ao_size),
+        }
+
+    def load_quality(self, values: dict[str, int]) -> None:
+        """Copia un preset a los campos de la calidad personalizada."""
+        for key in ("structure_steps", "shape_steps", "upsample_steps", "texture_steps"):
+            setattr(self, f"q_{key}", int(values[key]))
+        self.q_remesh_resolution = int(values["remesh_resolution"])
+        for key in ("upsample_resolution", "texture_size", "normal_size", "ao_size"):
+            setattr(self, f"q_{key}", str(values[key]))
+
+    def exports(self) -> list[str]:
+        return [f for f, on in (("fbx", self.export_fbx), ("obj", self.export_obj)) if on]
 
     def target_faces(self) -> int:
         presets = runtime.get().presets

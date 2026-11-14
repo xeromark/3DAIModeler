@@ -57,6 +57,10 @@ class Job:
     """Enderezar el modelo si sale inclinado (ver worker/postprocess.py)."""
     views: dict[str, str] = field(default_factory=dict)
     """Vistas adicionales (left/back/right) -> archivo dentro de la carpeta del trabajo."""
+    custom_quality: dict[str, int] = field(default_factory=dict)
+    """Parámetros de calidad si quality == "custom"."""
+    exports: list[str] = field(default_factory=list)
+    """Formatos extra a exportar al terminar: fbx, obj."""
     root: Path = field(default=Path(), repr=False, compare=False)
 
     @property
@@ -99,6 +103,8 @@ class Job:
         parts: bool = False,
         upright: bool = True,
         views: dict[str, Path] | None = None,
+        custom_quality: dict[str, int] | None = None,
+        exports: list[str] | None = None,
     ) -> Job:
         if not image.is_file():
             raise JobError(f"no existe la imagen {image}")
@@ -120,6 +126,8 @@ class Job:
             parts=parts,
             upright=upright,
             views={v: f"view_{v}{p.suffix.lower()}" for v, p in views.items()},
+            custom_quality=dict(custom_quality or {}),
+            exports=sorted(set(exports or [])),
             root=ws.jobs_dir,
         )
         job.dir.mkdir(parents=True)

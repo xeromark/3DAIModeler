@@ -51,6 +51,12 @@ El proyecto usa [SemVer](https://semver.org/lang/es/).
   Pixal3D multivista; sin vistas, todo funciona como antes.
 - Calidad **Máxima** con texturas de color y materiales en 8K (normal map y oclusión en 4K: a 8K
   el horneado del normal map no cabe en 16 GB de VRAM).
+- Calidad **Personalizada**: el panel "Avanzado" (solo visible con ella) ajusta pasos de la IA,
+  resolución de detalle y remesh, tamaño de cada textura (1K a 8K), semilla y exportación. Botones
+  para partir de Borrador, Estándar o Máxima; los valores quedan guardados en el trabajo.
+  CLI: `--quality custom --base max --set texture_size=8192 shape_steps=40`.
+- Exportar también **FBX** (texturas embebidas) y **OBJ** (con `.mtl`); las texturas se guardan
+  junto al modelo como `model_color.png`, `model_normal.png` y `model_orm.png`.
 - Panel **Estilos** (visualización en Blender, reversible): Anime / Cel shading (bandas de
   sombra y contorno por casco invertido), Blanco y negro, Colores saturados y Acuarela
   (compositor con filtro Kuwahara). Intensidad ajustable; se ve en el viewport y en el render, y

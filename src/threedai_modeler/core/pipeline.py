@@ -17,7 +17,7 @@ from .engine import Runner
 from .jobs import Job, StageRecord, StageStatus
 from .monitor import ResourceMonitor
 from .paths import Workspace
-from .presets import Presets
+from .presets import CUSTOM, Presets, Quality, custom_quality
 from .registry import ModelState, Registry
 from .usage import find_nvidia_smi, read_gpu
 from .workflows import GenerationParams, build_workflow, output_files, set_input, stage_label
@@ -78,7 +78,13 @@ class Pipeline:
         """Para ejecutar herramientas dentro del motor (etapa parts)."""
         self._nvidia_smi = find_nvidia_smi()
 
+    def quality_for(self, job: Job) -> Quality:
+        if job.quality == CUSTOM:
+            return custom_quality(job.custom_quality)
+        return self.presets.get_quality(job.quality)
+
     def check_ready(self, job: Job) -> None:
+        self.quality_for(job)  # valida antes de empezar
         if job.stages["generate"].status is not StageStatus.DONE:
             if self.registry.state(self.ws, job.model_id) is not ModelState.INSTALLED:
                 raise PipelineError(f"el modelo {job.model_id} no está descargado")
@@ -148,7 +154,7 @@ class Pipeline:
         params = GenerationParams(
             image=image,
             model_id=job.model_id,
-            quality=self.presets.get_quality(job.quality),
+            quality=self.quality_for(job),
             target_faces=job.target_faces,
             seed=job.seed,
             views=views,
@@ -207,6 +213,8 @@ class Pipeline:
             args += ["--parts", str(labels)]
         if not job.upright:
             args.append("--no-upright")
+        if job.exports:
+            args += ["--export", ",".join(job.exports)]
         started = time.monotonic()
         result = run_worker(self.blender, self.ws.worker_dir / "postprocess.py", args, timeout=1800)
         line = next((ln for ln in result.stdout.splitlines() if ln.startswith("RESULT ")), None)
@@ -214,6 +222,10 @@ class Pipeline:
             raise PipelineError("el worker de Blender no devolvió resultado")
         info: dict[str, Any] = json.loads(line.removeprefix("RESULT "))
         record.outputs = {"blend": str(blend.relative_to(job.dir))}
+        for fmt in job.exports:
+            exported = blend.with_suffix(f".{fmt}")
+            if exported.is_file():
+                record.outputs[fmt] = str(exported.relative_to(job.dir))
         record.metrics = {**info, "seconds": round(time.monotonic() - started, 1)}
 
     def _parts(
