@@ -83,7 +83,8 @@ def _run_job(ws: Workspace, reg: Registry, job: Job) -> int:
             last["label"], last["pct"] = p.label, pct
 
     cancel = threading.Event()
-    print(f"Trabajo {job.id} ({job.model_id}, {job.quality}, {job.target_faces} caras)")
+    faces = f"{job.target_faces} caras" if job.target_faces else "sin reducir"
+    print(f"Trabajo {job.id} ({job.model_id}, {job.quality}, {faces})")
     try:
         pipeline.run(job, progress, cancel)
     except KeyboardInterrupt:
@@ -140,7 +141,8 @@ def cmd_resume(ws: Workspace, reg: Registry, args: argparse.Namespace) -> int:
 def cmd_jobs(ws: Workspace, _reg: Registry, _args: argparse.Namespace) -> int:
     for job in Job.list_all(ws):
         states = " ".join(f"{n}={r.status.value}" for n, r in job.stages.items())
-        print(f"{job.id}  {job.model_id:16} {job.quality:9} {job.target_faces:>8} caras  {states}")
+        faces = f"{job.target_faces:>8} caras" if job.target_faces else " sin reducir"
+        print(f"{job.id}  {job.model_id:16} {job.quality:9} {faces}  {states}")
     return 0
 
 
@@ -254,7 +256,9 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("image")
     gen.add_argument("--model", help="ID del modelo (por defecto, el marcado con *)")
     gen.add_argument("--quality", default="standard", help="draft | standard | max")
-    gen.add_argument("--faces", default="medium", help="low | medium | high | ultra | número")
+    gen.add_argument(
+        "--faces", default="medium", help="low | medium | high | ultra | none | número"
+    )
     gen.add_argument("--seed", type=int)
     gen.add_argument("--name", help="nombre del objeto en Blender (por defecto, el de la imagen)")
     gen.add_argument("--parts", action="store_true", help="separar el modelo en partes (P3-SAM)")

@@ -40,8 +40,9 @@ texture_size = 4096
 normal_size = 4096
 ao_size = 2048
 
-# Caras (triángulos) del modelo final.
+# Caras (triángulos) del modelo final. "none" = sin reducir (se conserva la malla del remesh).
 [polycount]
+none = 0
 low = 10_000
 medium = 50_000
 high = 200_000

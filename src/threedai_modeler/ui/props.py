@@ -18,6 +18,7 @@ FACES_ITEMS = [
     ("medium", "Media (50k)", "50.000 caras"),
     ("high", "Alta (200k)", "200.000 caras"),
     ("ultra", "Ultra (700k)", "700.000 caras"),
+    ("none", "Sin reducir", "Malla completa (1 a 2 millones de caras): impresión 3D o esculpir"),
     ("custom", "Personalizada", "Número exacto de caras"),
 ]
 

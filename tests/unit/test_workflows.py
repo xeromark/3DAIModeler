@@ -32,6 +32,7 @@ def test_presets_load(presets: Presets) -> None:
     assert presets.resolve_faces("medium") == 50_000
     assert presets.resolve_faces("35_000") == 35_000
     assert presets.resolve_faces(1234) == 1234
+    assert presets.resolve_faces("none") == 0
     with pytest.raises(PresetError):
         presets.resolve_faces("enorme")
     with pytest.raises(PresetError):
@@ -112,3 +113,14 @@ def test_stage_labels() -> None:
     assert stage_label("shape_sampler") == "Forma"
     assert stage_label("bake_normal") == "Horneando texturas"
     assert stage_label("algo_nuevo") == "algo_nuevo"
+
+
+def test_no_reduction_skips_decimate(registry: Registry, presets: Presets) -> None:
+    params = GenerationParams("a.png", "pixal3d-int8", presets.get_quality("draft"), 0, 1)
+    wf = build_workflow(WORKFLOWS, registry, params)
+    assert "decimate" not in wf
+    assert wf["smooth_low"]["inputs"]["mesh"] == ["remesh", 0]
+    for node in wf.values():  # ninguna conexión colgando
+        for value in node["inputs"].values():
+            if isinstance(value, list):
+                assert value[0] in wf

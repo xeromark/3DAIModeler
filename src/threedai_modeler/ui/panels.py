@@ -356,7 +356,8 @@ class THREEDAI_PT_results(_Base, bpy.types.Panel):
                 row.template_icon(icon_value=thumb, scale=2.2)
             col = row.column(align=True)
             col.label(text=job.name)
-            info = f"{job.quality} · {job.target_faces // 1000}k caras"
+            faces = f"{job.target_faces // 1000}k caras" if job.target_faces else "sin reducir"
+            info = f"{job.quality} · {faces}"
             if job.parts:
                 info += " · partes"
             sub = col.row()

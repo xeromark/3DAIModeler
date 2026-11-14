@@ -29,6 +29,7 @@ class GenerationParams:
     model_id: str
     quality: Quality
     target_faces: int
+    """0 = sin reducir."""
     seed: int
 
 
@@ -111,7 +112,11 @@ def build_trellis_family(template: Workflow, registry: Registry, p: GenerationPa
 
     set_input(wf, "upsample_stage", "target_resolution", q.upsample_resolution)
     set_input(wf, "remesh", "resolution", q.remesh_resolution)
-    set_input(wf, "decimate", "target_face_count", p.target_faces)
+    if p.target_faces > 0:
+        set_input(wf, "decimate", "target_face_count", p.target_faces)
+    else:  # sin reducir: la malla del remesh pasa directo
+        del wf["decimate"]
+        wf["smooth_low"]["inputs"]["mesh"] = ["remesh", 0]
     set_input(wf, "unwrap", "resolution", q.texture_size)
     set_input(wf, "bake_color", "texture_size", q.texture_size)
     set_input(wf, "bake_normal", "resolution", q.normal_size)

@@ -59,13 +59,18 @@ class Presets:
             raise PresetError(f"calidad desconocida: {name} (opciones: {options})") from None
 
     def resolve_faces(self, value: str | int) -> int:
-        """Acepta un preset ('medium') o un número de caras ('35000' o 35000)."""
+        """Acepta un preset ('medium'), un número de caras ('35000' o 35000) o 'none'.
+
+        Devuelve 0 para "sin reducir".
+        """
         if isinstance(value, int) or str(value).replace("_", "").isdigit():
             faces = int(str(value).replace("_", ""))
         elif value in self.polycount:
             faces = self.polycount[value]
         else:
             raise PresetError(f"polígonos desconocidos: {value} (opciones: {list(self.polycount)})")
+        if faces == 0:
+            return 0  # sin reducir
         if not 100 <= faces <= 5_000_000:
-            raise PresetError("las caras deben estar entre 100 y 5.000.000")
+            raise PresetError("las caras deben estar entre 100 y 5.000.000 (o 'none')")
         return faces
