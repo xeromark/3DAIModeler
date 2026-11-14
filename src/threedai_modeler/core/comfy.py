@@ -375,10 +375,16 @@ class ComfyClient:
         if event.type == "execution_interrupted":
             raise ExecutionInterruptedError("ejecución interrumpida")
 
-    def _final_outputs(self, prompt_id: str) -> dict[str, Any]:
+    def _final_outputs(self, prompt_id: str, wait: float = 60.0) -> dict[str, Any]:
+        # ComfyUI avisa "terminado" por WebSocket un instante antes de guardar el historial;
+        # con el sistema cargado (swap) esa demora puede ser de varios segundos.
+        deadline = time.monotonic() + wait
         entry = self.history(prompt_id)
+        while entry is None and time.monotonic() < deadline:
+            time.sleep(0.5)
+            entry = self.history(prompt_id)
         if entry is None:
-            raise ComfyError(f"{prompt_id}: sin historial")
+            raise ComfyError(f"{prompt_id}: el motor no guardó el resultado en {wait:.0f} s")
         status = entry.get("status", {})
         if status.get("status_str") == "error":
             for kind, data in status.get("messages", []):

@@ -101,3 +101,27 @@ def test_rejected_prompt_lists_node_errors() -> None:
         ComfyClient._raise_rejected(detail)
     assert "unet (UNETLoader): file not found" in str(info.value)
     assert "unet" in info.value.node_errors
+
+
+def test_final_outputs_waits_for_history() -> None:
+    class SlowHistory(ComfyClient):
+        calls = 0
+
+        def history(self, prompt_id: str) -> dict[str, object] | None:
+            self.calls += 1
+            if self.calls < 3:
+                return None  # todavía no guardado
+            return {"status": {"status_str": "success"}, "outputs": {"save": {"3d": [1]}}}
+
+    client = SlowHistory()
+    assert client._final_outputs("p", wait=5) == {"save": {"3d": [1]}}
+    assert client.calls == 3
+
+
+def test_final_outputs_gives_up() -> None:
+    class NoHistory(ComfyClient):
+        def history(self, prompt_id: str) -> dict[str, object] | None:
+            return None
+
+    with pytest.raises(ComfyError, match="no guardó"):
+        NoHistory()._final_outputs("p", wait=0.6)
