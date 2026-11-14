@@ -33,6 +33,7 @@ class Runtime:
         self.recent_jobs: list[Job] = []
         self.last_error: str | None = None
         self.engine_disk_bytes: int | None = None
+        self.parts_installed = False
         self.models_disk_bytes = 0
         self._polls = 0
         self.version = 0
@@ -74,6 +75,10 @@ class Runtime:
                 if self.registry.is_file_installed(self.ws, f)
             }
             self.models_disk_bytes = sum(installed.values())
+            parts_installed = self.manager.runner.parts_installed()
+            if parts_installed != self.parts_installed:
+                self.parts_installed = parts_installed
+                self.version += 1
             if self._polls % DISK_EVERY == 0:
                 self.engine_disk_bytes = engine_disk_usage(self.ws)
             self._polls += 1

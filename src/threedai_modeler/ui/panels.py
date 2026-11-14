@@ -5,6 +5,7 @@ from __future__ import annotations
 import bpy
 
 from ..core.engine import EngineState
+from ..core.pipeline import PARTS_MODEL
 from ..core.registry import ModelState
 from ..core.tasks import Task, TaskStatus
 from ..core.workflows import BUILDERS
@@ -115,12 +116,31 @@ class THREEDAI_PT_generate(_Base, bpy.types.Panel):
         sub.enabled = not props.random_seed
         sub.prop(props, "seed")
         layout.prop(props, "object_name")
+        layout.prop(props, "split_parts")
+        parts_ready = True
+        if props.split_parts:
+            box = layout.box()
+            if rt.model_states.get(PARTS_MODEL) is not ModelState.INSTALLED:
+                parts_ready = False
+                box.label(text="Falta el modelo de partes (0.5 GB)", icon="INFO")
+                if download is None or not download.running:
+                    op = box.operator("threedai.model_download", icon="IMPORT")
+                    op.model_id = PARTS_MODEL
+            if not rt.parts_installed:
+                parts_ready = False
+                box.label(text="Falta instalar el soporte de partes", icon="INFO")
+                engine_task = rt.tasks.get("engine")
+                if engine_task is None or not engine_task.running:
+                    box.operator("threedai.parts_install", icon="IMPORT")
+            if parts_ready:
+                note = "Licencia Hunyuan 3D-Part: no válida en UE, UK ni Corea"
+                box.label(text=note, icon="INFO")
 
         gen = rt.tasks.get("generate")
         busy = gen is not None and gen.running
         row = layout.row()
         row.scale_y = 1.5
-        row.enabled = not busy and model_state is ModelState.INSTALLED
+        row.enabled = not busy and model_state is ModelState.INSTALLED and parts_ready
         row.operator("threedai.generate", icon="MESH_MONKEY")
         draw_task(layout, gen)
 
@@ -158,7 +178,7 @@ class THREEDAI_PT_models(_Base, bpy.types.Panel):
             size = rt.registry.model_size(model.id) / 1e9
             sub = box.row()
             sub.scale_y = 0.7
-            supported = "" if model.family in BUILDERS else " · próximamente"
+            supported = "" if model.family in (*BUILDERS, "p3sam") else " · próximamente"
             info = f"{model.family} · {model.precision} · {size:.1f} GB · {model.license}"
             sub.label(text=info + supported)
             actions = row.row(align=True)

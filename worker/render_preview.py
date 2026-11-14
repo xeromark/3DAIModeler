@@ -1,6 +1,9 @@
-"""Renderiza vistas previas de un GLB (4 ángulos en una imagen) con Blender en background.
+"""Renderiza vistas previas (4 ángulos en una imagen) con Blender en background.
 
-    blender --background --factory-startup --python worker/render_preview.py -- in.glb out.png [px]
+    blender --background --factory-startup --python worker/render_preview.py -- \\
+        in.glb|in.blend out.png [px] [--color-parts]
+
+--color-parts pinta cada objeto de un color distinto (para revisar la separación en partes).
 
 Sirve para revisar resultados y para el benchmark sin abrir la interfaz de Blender.
 """
@@ -15,18 +18,50 @@ import bpy
 from mathutils import Vector
 
 
-def parse_args() -> tuple[Path, Path, int]:
+def parse_args() -> tuple[Path, Path, int, bool]:
     argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
+    color_parts = "--color-parts" in argv
+    argv = [a for a in argv if a != "--color-parts"]
     if len(argv) < 2:
-        raise SystemExit("uso: ... -- in.glb out.png [px]")
+        raise SystemExit("uso: ... -- in.glb|in.blend out.png [px] [--color-parts]")
     size = int(argv[2]) if len(argv) > 2 else 512
-    return Path(argv[0]).resolve(), Path(argv[1]).resolve(), size
+    return Path(argv[0]).resolve(), Path(argv[1]).resolve(), size, color_parts
 
 
-def import_glb(path: Path) -> list[bpy.types.Object]:
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    bpy.ops.import_scene.gltf(filepath=str(path))
+def load_scene(path: Path) -> list[bpy.types.Object]:
+    if path.suffix == ".blend":
+        bpy.ops.wm.open_mainfile(filepath=str(path))
+        for obj in list(bpy.context.scene.objects):
+            if obj.type in ("LIGHT", "CAMERA"):
+                bpy.data.objects.remove(obj)
+    else:
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        bpy.ops.import_scene.gltf(filepath=str(path))
     return [o for o in bpy.context.scene.objects if o.type == "MESH"]
+
+
+PALETTE = [
+    (0.90, 0.30, 0.25),
+    (0.25, 0.60, 0.90),
+    (0.35, 0.80, 0.35),
+    (0.95, 0.75, 0.20),
+    (0.70, 0.40, 0.85),
+    (0.20, 0.80, 0.80),
+    (0.95, 0.50, 0.70),
+    (0.55, 0.45, 0.30),
+]
+
+
+def color_parts(objects: list[bpy.types.Object]) -> None:
+    for i, obj in enumerate(objects):
+        mat = bpy.data.materials.new(f"parte_{i}")
+        mat.diffuse_color = (*PALETTE[i % len(PALETTE)], 1.0)
+        mat.use_nodes = True
+        bsdf = mat.node_tree.nodes.get("Principled BSDF")
+        if bsdf is not None:
+            bsdf.inputs["Base Color"].default_value = (*PALETTE[i % len(PALETTE)], 1.0)
+        obj.data.materials.clear()
+        obj.data.materials.append(mat)
 
 
 def bounds(objects: list[bpy.types.Object]) -> tuple[Vector, float]:
@@ -76,10 +111,12 @@ def place_camera(cam: bpy.types.Object, center: Vector, radius: float, yaw_deg: 
 
 
 def main() -> None:
-    src, out, size = parse_args()
-    objects = import_glb(src)
+    src, out, size, paint = parse_args()
+    objects = load_scene(src)
     if not objects:
         raise SystemExit(f"{src}: sin mallas")
+    if paint:
+        color_parts(objects)
     center, radius = bounds(objects)
     cam = setup_scene(center, radius, size)
 

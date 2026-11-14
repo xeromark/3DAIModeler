@@ -29,7 +29,8 @@ def test_roundtrip_keeps_stage_state(tmp_path: Path) -> None:
     rec.status = StageStatus.DONE
     rec.outputs["glb"] = "generate/model.glb"
     rec.metrics["seconds"] = 12.5
-    job.stages["postprocess"].status = StageStatus.DONE
+    for stage in ("parts", "postprocess"):
+        job.stages[stage].status = StageStatus.DONE
     job.save()
 
     loaded = Job.load(ws, job.id)

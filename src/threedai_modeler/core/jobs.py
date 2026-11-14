@@ -13,8 +13,8 @@ from typing import Any
 
 from .paths import Workspace
 
-STAGES: tuple[str, ...] = ("generate", "postprocess")
-"""Etapas en orden. M5 agrega 'parts'."""
+STAGES: tuple[str, ...] = ("generate", "parts", "postprocess")
+"""Etapas en orden. 'parts' se marca como hecha sin trabajo si el trabajo no pide partes."""
 
 
 class JobError(RuntimeError):
@@ -51,6 +51,8 @@ class Job:
     stages: dict[str, StageRecord]
     name: str = "Modelo"
     """Nombre del objeto en Blender (por defecto, el nombre de la imagen)."""
+    parts: bool = False
+    """Separar el modelo en partes (P3-SAM)."""
     root: Path = field(default=Path(), repr=False, compare=False)
 
     @property
@@ -82,6 +84,7 @@ class Job:
         target_faces: int,
         seed: int,
         name: str | None = None,
+        parts: bool = False,
     ) -> Job:
         if not image.is_file():
             raise JobError(f"no existe la imagen {image}")
@@ -96,6 +99,7 @@ class Job:
             seed=seed,
             stages={stage: StageRecord() for stage in STAGES},
             name=name or image.stem,
+            parts=parts,
             root=ws.jobs_dir,
         )
         job.dir.mkdir(parents=True)

@@ -1,10 +1,10 @@
 """GLB generado -> .blend listo para usar. Se ejecuta con Blender en background.
 
     blender --background --factory-startup --python worker/postprocess.py -- \\
-        in.glb out.blend --name Modelo --target-faces 50000
+        in.glb out.blend --name Modelo --target-faces 50000 [--parts labels.npz]
 
-Pasos: importar, nombrar, origen abajo al centro, sombreado suave, empaquetar texturas,
-verificar polígonos y guardar. Imprime una línea RESULT con JSON para el pipeline.
+Pasos: importar, separar en partes (opcional), nombrar, origen abajo al centro, sombreado suave,
+empaquetar texturas, verificar polígonos y guardar. Imprime una línea RESULT con JSON.
 """
 
 from __future__ import annotations
@@ -15,7 +15,9 @@ import sys
 from pathlib import Path
 
 import bpy
+import numpy as np
 from mathutils import Matrix, Vector
+from mathutils.kdtree import KDTree
 
 FACE_TOLERANCE = 0.05
 
@@ -27,6 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("blend", type=Path)
     parser.add_argument("--name", default="Modelo")
     parser.add_argument("--target-faces", type=int, default=0)
+    parser.add_argument("--parts", type=Path, help="npz de parts_segment.py (centers, labels)")
     return parser.parse_args(argv)
 
 
@@ -74,6 +77,64 @@ def origin_to_bottom_center(objects: list[bpy.types.Object]) -> None:
         obj.data.transform(to_world.inverted() @ Matrix.Translation(-pivot) @ to_world)
 
 
+def gltf_to_blender(points: np.ndarray) -> np.ndarray:
+    """glTF es Y-arriba; Blender, Z-arriba: (x, y, z) -> (x, -z, y)."""
+    return np.stack([points[:, 0], -points[:, 2], points[:, 1]], axis=1)
+
+
+def split_parts(obj: bpy.types.Object, labels_file: Path) -> list[bpy.types.Object]:
+    """Separa `obj` en un objeto por parte. Cada cara toma la etiqueta de la cara
+    segmentada más cercana, así no importa si el importador reordenó las caras."""
+    data = np.load(labels_file)
+    centers = gltf_to_blender(data["centers"].astype(np.float64))
+    labels = data["labels"]
+    tree = KDTree(len(centers))
+    for i, c in enumerate(centers):
+        tree.insert(c, i)
+    tree.balance()
+
+    mesh = obj.data
+    to_world = obj.matrix_world
+    face_labels = [int(labels[tree.find(to_world @ p.center)[1]]) for p in mesh.polygons]
+    unique, counts = np.unique(face_labels, return_counts=True)
+    if len(unique) <= 1:
+        return [obj]
+    order = [int(u) for u in unique[np.argsort(-counts)]]  # la parte más grande primero
+
+    attr = mesh.attributes.new("part", "INT", "FACE")
+    attr.data.foreach_set("value", face_labels)
+
+    parts = [obj]
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.context.view_layer.objects.active = obj
+    bpy.context.tool_settings.mesh_select_mode = (False, False, True)  # selección por caras
+    for label in order[1:]:
+        before = set(bpy.context.scene.objects)
+        source = parts[0]
+        values = [0] * len(source.data.polygons)
+        source.data.attributes["part"].data.foreach_get("value", values)
+        source.data.vertices.foreach_set("select", [False] * len(source.data.vertices))
+        source.data.edges.foreach_set("select", [False] * len(source.data.edges))
+        source.data.polygons.foreach_set("select", [v == label for v in values])
+        bpy.context.view_layer.objects.active = source
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.separate(type="SELECTED")
+        bpy.ops.object.mode_set(mode="OBJECT")
+        parts += [o for o in bpy.context.scene.objects if o not in before]
+    for part in parts:
+        part.data.attributes.remove(part.data.attributes["part"])
+    return parts
+
+
+def origins_to_centers(objects: list[bpy.types.Object]) -> None:
+    """Cada parte con su origen en el centro de su caja, para moverla o rotarla fácil."""
+    for obj in objects:
+        bpy.ops.object.select_all(action="DESELECT")
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="BOUNDS")
+
+
 def shade_smooth(objects: list[bpy.types.Object]) -> None:
     for obj in objects:
         for poly in obj.data.polygons:
@@ -81,8 +142,8 @@ def shade_smooth(objects: list[bpy.types.Object]) -> None:
 
 
 def name_objects(objects: list[bpy.types.Object], name: str) -> None:
-    for i, obj in enumerate(objects):
-        obj.name = name if len(objects) == 1 else f"{name}.{i:02d}"
+    for i, obj in enumerate(objects, start=1):
+        obj.name = name if len(objects) == 1 else f"{name}.parte_{i:02d}"
         obj.data.name = obj.name
         for slot in obj.material_slots:
             if slot.material is not None and slot.material.users == 1:
@@ -121,7 +182,11 @@ def main() -> None:
     objects = import_glb(args.glb)
     flatten_hierarchy(objects)
     apply_transforms(objects)
+    if args.parts is not None and len(objects) == 1:
+        objects = split_parts(objects[0], args.parts)
     origin_to_bottom_center(objects)
+    if len(objects) > 1:
+        origins_to_centers(objects)
     shade_smooth(objects)
     name_objects(objects, args.name)
     packed = pack_images()

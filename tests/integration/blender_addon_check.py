@@ -88,6 +88,8 @@ if image is not None:
     props.faces = "custom"
     props.faces_custom = 5000
     props.object_name = "PruebaAddon"
+    props.split_parts = rt.parts_installed and rt.model_states.get("p3sam").value == "installed"
+    print("PARTS", props.split_parts)
     assert bpy.ops.threedai.generate() == {"FINISHED"}
     task = rt.tasks.get("generate")
     last = ""
@@ -101,11 +103,12 @@ if image is not None:
     pump(2)
     print("TASK", task.status, task.error, task.message)
     assert task.status.value == "done", task.error
-    obj = bpy.data.objects.get("PruebaAddon")
-    assert obj is not None, "el resultado no se importó"
-    assert obj.name in bpy.context.scene.objects
-    materials = [m.name for m in obj.data.materials]
-    print("IMPORTED", obj.name, len(obj.data.polygons), "caras", materials)
+    imported = [o for o in bpy.context.scene.objects if o.name.startswith("PruebaAddon")]
+    assert imported, "el resultado no se importó"
+    if props.split_parts:
+        assert len(imported) > 1, "se pidieron partes pero llegó un solo objeto"
+    faces = sum(len(o.data.polygons) for o in imported)
+    print("IMPORTED", [o.name for o in imported], faces, "caras")
 
 bpy.ops.preferences.addon_disable(module=module)
 print("ADDON_CHECK_OK")

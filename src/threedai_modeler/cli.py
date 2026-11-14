@@ -20,6 +20,7 @@ from pathlib import Path
 
 from .core.blender import BlenderNotFoundError, WorkerError, find_blender, run_worker
 from .core.comfy import ComfyClient, ComfyError
+from .core.engine import DockerRunner, EngineError
 from .core.jobs import Job
 from .core.paths import Workspace
 from .core.pipeline import Pipeline, PipelineError, Progress
@@ -69,7 +70,9 @@ def cmd_models_remove(ws: Workspace, reg: Registry, args: argparse.Namespace) ->
 
 
 def _run_job(ws: Workspace, reg: Registry, job: Job) -> int:
-    pipeline = Pipeline(ws, reg, Presets.load(ws.presets_file), ComfyClient())
+    pipeline = Pipeline(
+        ws, reg, Presets.load(ws.presets_file), ComfyClient(), runner=DockerRunner(ws)
+    )
     last = {"label": "", "pct": -1}
 
     def progress(p: Progress) -> None:
@@ -87,7 +90,7 @@ def _run_job(ws: Workspace, reg: Registry, job: Job) -> int:
         cancel.set()
         print("Cancelado. Reanudar con: resume", job.id)
         return 130
-    except (PipelineError, ComfyError, BlenderNotFoundError, WorkerError) as err:
+    except (PipelineError, ComfyError, BlenderNotFoundError, WorkerError, EngineError) as err:
         print(f"Error: {err}", file=sys.stderr)
         print(f"Reanudar con: resume {job.id}", file=sys.stderr)
         return 1
@@ -121,6 +124,7 @@ def cmd_generate(ws: Workspace, reg: Registry, args: argparse.Namespace) -> int:
         target_faces=presets.resolve_faces(args.faces),
         seed=args.seed if args.seed is not None else random.randrange(2**31),
         name=args.name,
+        parts=args.parts,
     )
     return _run_job(ws, reg, job)
 
@@ -173,6 +177,7 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--faces", default="medium", help="low | medium | high | ultra | número")
     gen.add_argument("--seed", type=int)
     gen.add_argument("--name", help="nombre del objeto en Blender (por defecto, el de la imagen)")
+    gen.add_argument("--parts", action="store_true", help="separar el modelo en partes (P3-SAM)")
     gen.set_defaults(fn=cmd_generate)
 
     res = sub.add_parser("resume", help="reanudar un trabajo interrumpido")

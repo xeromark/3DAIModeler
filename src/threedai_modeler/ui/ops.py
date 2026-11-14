@@ -11,7 +11,7 @@ from bpy.props import BoolProperty, EnumProperty, StringProperty
 
 from ..core.engine import EngineState
 from ..core.jobs import Job
-from ..core.pipeline import Pipeline, Progress
+from ..core.pipeline import PARTS_MODEL, Pipeline, Progress
 from ..core.registry import APPROVED_ORGS, ModelState, fetch_hf_file
 from ..core.tasks import Task, TaskBusyError, TaskContext, TaskStatus
 from . import prefs, runtime
@@ -88,6 +88,24 @@ class THREEDAI_OT_engine_stop(bpy.types.Operator):
             rt.manager.stop()
 
         return _start(self, "engine", "Detener motor", work, _refresh_after)
+
+
+class THREEDAI_OT_parts_install(bpy.types.Operator):
+    bl_idname = "threedai.parts_install"
+    bl_label = "Instalar soporte de partes"
+    bl_description = "Instala P3-SAM (Hunyuan3D-Part) en un entorno aparte dentro del motor (~3 GB)"
+
+    def execute(self, _context: bpy.types.Context) -> set[str]:
+        runner = runtime.get().manager.runner
+
+        def work(ctx: TaskContext) -> None:
+            def log(line: str) -> None:
+                ctx.log(line)
+                ctx.report(line[:80])
+
+            runner.install_parts(log, ctx.cancel)
+
+        return _start(self, "engine", "Instalar soporte de partes", work, _refresh_after)
 
 
 class THREEDAI_OT_engine_logs(bpy.types.Operator):
@@ -302,6 +320,13 @@ class THREEDAI_OT_generate(bpy.types.Operator):
         if rt.engine_state is not EngineState.READY and not auto_start:
             self.report({"ERROR"}, "Inicia el motor primero")
             return {"CANCELLED"}
+        if props.split_parts:
+            if rt.registry.state(rt.ws, PARTS_MODEL) is not ModelState.INSTALLED:
+                self.report({"ERROR"}, "Descarga el modelo de partes (P3-SAM) primero")
+                return {"CANCELLED"}
+            if not rt.manager.runner.parts_installed():
+                self.report({"ERROR"}, "Instala el soporte de partes primero")
+                return {"CANCELLED"}
         try:
             target_faces = props.target_faces()
         except ValueError as err:
@@ -316,6 +341,7 @@ class THREEDAI_OT_generate(bpy.types.Operator):
             target_faces=target_faces,
             seed=random.randrange(2**31) if props.random_seed else props.seed,
             name=props.object_name.strip() or None,
+            parts=props.split_parts,
         )
         blender = Path(bpy.app.binary_path)
         rt.refresh()
@@ -334,7 +360,9 @@ def _generation_work(job: Job, blender: Path) -> Any:
         def progress(p: Progress) -> None:
             ctx.report(p.label, p.fraction)
 
-        pipeline = Pipeline(rt.ws, rt.registry, rt.presets, rt.client, blender)
+        pipeline = Pipeline(
+            rt.ws, rt.registry, rt.presets, rt.client, blender, runner=rt.manager.runner
+        )
         return pipeline.run(job, progress, ctx.cancel)
 
     return work
@@ -424,6 +452,7 @@ CLASSES = (
     THREEDAI_OT_engine_install,
     THREEDAI_OT_engine_start,
     THREEDAI_OT_engine_stop,
+    THREEDAI_OT_parts_install,
     THREEDAI_OT_engine_logs,
     THREEDAI_OT_model_download,
     THREEDAI_OT_model_remove,

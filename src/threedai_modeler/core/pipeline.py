@@ -13,6 +13,7 @@ from typing import Any
 
 from .blender import find_blender, run_worker
 from .comfy import ComfyClient, Event
+from .engine import Runner
 from .jobs import Job, StageRecord, StageStatus
 from .monitor import ResourceMonitor
 from .paths import Workspace
@@ -21,6 +22,7 @@ from .registry import ModelState, Registry
 from .workflows import GenerationParams, build_workflow, output_files, set_input, stage_label
 
 ProgressFn = Callable[["Progress"], None]
+PARTS_MODEL = "p3sam"
 
 
 class PipelineError(RuntimeError):
@@ -63,6 +65,7 @@ class Pipeline:
         presets: Presets,
         client: ComfyClient,
         blender: Path | None = None,
+        runner: Runner | None = None,
     ) -> None:
         self.ws = ws
         self.registry = registry
@@ -70,11 +73,20 @@ class Pipeline:
         self.client = client
         self.blender = blender
         """Ejecutable de Blender para el postproceso (en el addon: bpy.app.binary_path)."""
+        self.runner = runner
+        """Para ejecutar herramientas dentro del motor (etapa parts)."""
 
     def check_ready(self, job: Job) -> None:
         if job.stages["generate"].status is not StageStatus.DONE:
             if self.registry.state(self.ws, job.model_id) is not ModelState.INSTALLED:
                 raise PipelineError(f"el modelo {job.model_id} no está descargado")
+            if not self.client.is_ready():
+                raise PipelineError(f"el motor no responde en {self.client.base_url}")
+        if job.parts and job.stages["parts"].status is not StageStatus.DONE:
+            if self.runner is None or not self.runner.parts_installed():
+                raise PipelineError("falta instalar el soporte de partes")
+            if self.registry.state(self.ws, PARTS_MODEL) is not ModelState.INSTALLED:
+                raise PipelineError("falta descargar el modelo de partes (p3sam)")
             if not self.client.is_ready():
                 raise PipelineError(f"el motor no responde en {self.client.base_url}")
         self.blender = find_blender(self.blender)
@@ -86,7 +98,7 @@ class Pipeline:
         cancel: threading.Event | None = None,
     ) -> Job:
         self.check_ready(job)
-        steps = {"generate": self._generate, "postprocess": self._postprocess}
+        steps = {"generate": self._generate, "parts": self._parts, "postprocess": self._postprocess}
         for name, record in job.stages.items():
             if record.status is StageStatus.DONE:
                 continue
@@ -179,6 +191,9 @@ class Pipeline:
         blend = job.dir / "postprocess" / "model.blend"
         assert self.blender is not None  # lo resuelve check_ready
         args = [str(glb), str(blend), "--name", job.name, "--target-faces", str(job.target_faces)]
+        labels = job.output_path("parts", "labels")
+        if job.parts and labels is not None and labels.is_file():
+            args += ["--parts", str(labels)]
         started = time.monotonic()
         result = run_worker(self.blender, self.ws.worker_dir / "postprocess.py", args, timeout=1800)
         line = next((ln for ln in result.stdout.splitlines() if ln.startswith("RESULT ")), None)
@@ -187,3 +202,40 @@ class Pipeline:
         info: dict[str, Any] = json.loads(line.removeprefix("RESULT "))
         record.outputs = {"blend": str(blend.relative_to(job.dir))}
         record.metrics = {**info, "seconds": round(time.monotonic() - started, 1)}
+
+    def _parts(
+        self,
+        job: Job,
+        record: StageRecord,
+        on_progress: ProgressFn | None,
+        _cancel: threading.Event | None,
+    ) -> None:
+        if not job.parts:
+            record.metrics = {"skipped": True}
+            return
+        if on_progress:
+            on_progress(Progress("parts", "Separando en partes"))
+        assert self.runner is not None  # lo verifica check_ready
+        glb = job.output_path("generate", "glb")
+        if glb is None or not glb.is_file():
+            raise PipelineError("falta el GLB de la etapa generate")
+        labels = job.dir / "parts" / "labels.npz"
+        labels.parent.mkdir(parents=True, exist_ok=True)
+        weights = self.registry.local_path(self.ws, self.registry.files_of(PARTS_MODEL)[0])
+        stdout = self.runner.run_tool(
+            [
+                "/workspace/parts/.venv/bin/python",
+                "/scripts/parts_segment.py",
+                self.runner.engine_path(glb),
+                self.runner.engine_path(labels),
+                "--ckpt",
+                self.runner.engine_path(weights),
+                "--seed",
+                str(job.seed),
+            ]
+        )
+        line = next((ln for ln in stdout.splitlines() if ln.startswith("RESULT ")), None)
+        if line is None or not labels.is_file():
+            raise PipelineError("la segmentación en partes no devolvió resultado")
+        record.outputs = {"labels": str(labels.relative_to(job.dir))}
+        record.metrics = json.loads(line.removeprefix("RESULT "))

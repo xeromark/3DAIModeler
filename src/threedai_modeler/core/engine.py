@@ -51,6 +51,15 @@ class Runner(Protocol):
     def stop_detached(self) -> None:
         """Ordena detener sin esperar (para el cierre de Blender)."""
 
+    def engine_path(self, host_path: Path) -> str:
+        """Ruta de un archivo de engine/ tal como la ve el motor."""
+
+    def run_tool(self, args: list[str], timeout: float = 3600) -> str:
+        """Ejecuta un comando dentro del motor (que debe estar corriendo). Devuelve stdout."""
+
+    def parts_installed(self) -> bool: ...
+    def install_parts(self, log: LogFn, cancel: threading.Event | None = None) -> None: ...
+
 
 class DockerRunner:
     """Motor en Docker Compose (compose.yaml del workspace)."""
@@ -126,7 +135,8 @@ class DockerRunner:
             raise EngineError("Docker está apagado: inícialo con 'sudo systemctl start docker'.")
 
     def is_installed(self) -> bool:
-        venv_ok = (self.ws.engine_dir / ".venv" / "bin" / "python").exists()
+        # El python del venv es un enlace a una ruta que solo existe dentro del contenedor.
+        venv_ok = os.path.lexists(self.ws.engine_dir / ".venv" / "bin" / "python")
         comfy_ok = (self.ws.comfy_dir / "main.py").is_file()
         if not (venv_ok and comfy_ok):
             return False
@@ -154,6 +164,26 @@ class DockerRunner:
     def logs(self, lines: int = 200) -> str:
         result = self._run(self._compose("logs", "--no-color", "--tail", str(lines), SERVICE))
         return result.stdout + result.stderr
+
+    def engine_path(self, host_path: Path) -> str:
+        rel = host_path.resolve().relative_to(self.ws.engine_dir.resolve())
+        return f"/workspace/{rel.as_posix()}"
+
+    def run_tool(self, args: list[str], timeout: float = 3600) -> str:
+        return self._checked(self._compose("exec", "-T", SERVICE, *args), timeout=timeout)
+
+    def parts_installed(self) -> bool:
+        parts = self.ws.engine_dir / "parts"
+        return (
+            os.path.lexists(parts / ".venv" / "bin" / "python")
+            and (parts / "Hunyuan3D-Part" / "P3-SAM" / "model.py").is_file()
+        )
+
+    def install_parts(self, log: LogFn, cancel: threading.Event | None = None) -> None:
+        log(">> Instalando el soporte de partes (P3-SAM)")
+        self._stream(
+            self._compose("run", "--rm", SERVICE, "bash", "/scripts/setup-parts.sh"), log, cancel
+        )
 
     def stop_detached(self) -> None:
         subprocess.Popen(

@@ -58,6 +58,7 @@ imagen de Docker (~1 GB en `/var/lib/docker`).
 ./scripts/engine.sh build   # una vez
 ./scripts/engine.sh setup   # instala ComfyUI + PyTorch en engine/
 ./scripts/engine.sh gpu     # verifica la GPU
+./scripts/engine.sh setup-parts   # opcional: soporte de partes (P3-SAM) en engine/parts
 ./scripts/engine.sh up      # ComfyUI en http://127.0.0.1:8188
 ./scripts/engine.sh down
 ```

@@ -91,6 +91,17 @@ dest = "diffusion_models"
 size = 5253048192
 sha256 = "d01952ad137213f6a868f86b6b877026276f84af5eec23069217475a0bad3a31"
 
+# --- Partes (Hunyuan3D-Part) -------------------------------------------------
+# Licencia "Tencent Hunyuan 3D-Part Community": no aplica en la UE, Reino Unido ni Corea del Sur.
+
+[files.p3sam]
+repo = "tencent/Hunyuan3D-Part"
+revision = "677174466c53571e8bacd5050dff5948734a1a4d"
+path = "p3sam/p3sam.safetensors"
+dest = "p3sam"
+size = 450968044
+sha256 = "eb76550cfbe06f154c6e9b17167ccfc28222bb4a216ec7b12ac2bf7d762de38c"
+
 # --- Modelos -----------------------------------------------------------------
 
 [[models]]
@@ -156,3 +167,12 @@ files = [
     "trellis2-texture-vae",
     "birefnet",
 ]
+
+[[models]]
+id = "p3sam"
+name = "P3-SAM (separar en partes)"
+family = "p3sam"
+roles = ["parts"]
+precision = "fp32"
+license = "Tencent Hunyuan 3D-Part Community"
+files = ["p3sam"]

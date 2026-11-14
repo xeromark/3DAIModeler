@@ -52,6 +52,18 @@ class FakeRunner:
         self.calls.append("stop_detached")
         self.running = False
 
+    def engine_path(self, host_path: Path) -> str:
+        return str(host_path)
+
+    def run_tool(self, args: list[str], timeout: float = 3600) -> str:
+        return ""
+
+    def parts_installed(self) -> bool:
+        return False
+
+    def install_parts(self, log: LogFn, cancel: threading.Event | None = None) -> None:
+        pass
+
 
 class FakeClient(ComfyClient):
     def __init__(self, ready_after: int = 0) -> None:
@@ -132,3 +144,32 @@ def test_docker_runner_missing_docker(tmp_path: Path, monkeypatch: pytest.Monkey
     monkeypatch.setattr(subprocess, "run", missing)
     with pytest.raises(EngineError, match="no está instalado"):
         DockerRunner(Workspace(tmp_path)).is_running()
+
+
+def test_engine_path_maps_into_container(tmp_path: Path) -> None:
+    runner = DockerRunner(Workspace(tmp_path))
+    target = tmp_path / "engine" / "jobs" / "x" / "model.glb"
+    assert runner.engine_path(target) == "/workspace/jobs/x/model.glb"
+    with pytest.raises(ValueError):
+        runner.engine_path(tmp_path / "otra" / "cosa")
+
+
+def test_install_checks_accept_container_only_symlinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El venv apunta a /workspace/... (solo existe en el contenedor): el enlace basta."""
+    ws = Workspace(tmp_path)
+    for venv in (ws.engine_dir / ".venv", ws.engine_dir / "parts" / ".venv"):
+        (venv / "bin").mkdir(parents=True)
+        (venv / "bin" / "python").symlink_to("/workspace/.cache/python/no-existe/python3")
+    ws.comfy_dir.mkdir(parents=True)
+    (ws.comfy_dir / "main.py").write_text("")
+    model = ws.engine_dir / "parts" / "Hunyuan3D-Part" / "P3-SAM" / "model.py"
+    model.parent.mkdir(parents=True)
+    model.write_text("")
+    monkeypatch.setattr(
+        subprocess, "run", lambda cmd, **_k: subprocess.CompletedProcess(cmd, 0, "", "")
+    )
+    runner = DockerRunner(ws)
+    assert runner.is_installed()
+    assert runner.parts_installed()

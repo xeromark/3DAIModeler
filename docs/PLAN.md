@@ -352,15 +352,23 @@ y la interfaz no se congela en ningún momento.
 variante (probado con `trellis_2_bf16` de `Comfy-Org/TRELLIS.2`, sin descargar 10 GB) funciona de
 punta a punta en el addon.
 
-### M5 — Partes
+### M5 — Partes *(completo: segmentación; X-Part pendiente)*
 
-- Integrar Hunyuan3D-Part (P3-SAM + X-Part light) como nodo propio de ComfyUI, compilando sus
-  dependencias para `sm_120`.
-- Worker: cada parte es un objeto con nombre, con presupuesto de polígonos repartido y su propio bake.
-- Opción en la interfaz: modelo entero o separado en partes.
+- [x] P3-SAM (Hunyuan3D-Part) en un entorno Python aparte dentro del motor
+  (`scripts/container/setup-parts.sh`), sin compilar nada: `spconv-cu126` corre en `sm_120`,
+  `torch_scatter` se reemplaza por `torch.segment_reduce` y Sonata se construye sin flash-attn
+  con los pesos que ya trae `p3sam.safetensors`.
+- [x] Etapa `parts` opcional del pipeline: segmenta el GLB y Blender separa el modelo texturizado
+  en un objeto por parte (etiquetas asignadas por cercanía con KD-tree; conserva UVs y material).
+  El presupuesto de polígonos se reparte solo: se reduce antes de separar.
+- [x] Opción "Separar en partes" en el addon, con descarga del modelo e instalación del soporte.
+- [ ] X-Part (completar la geometría oculta en los cortes): pendiente; requiere ~9 GB de pesos y
+  medir la memoria. Hoy las partes quedan abiertas donde se tocan.
+- [ ] Ajustar los parámetros de P3-SAM con el benchmark (p. ej. la hoja y la cabeza del hacha
+  salen como una sola parte).
 
-**Aceptación:** un modelo de prueba (por ejemplo, una silla o un personaje simple) sale con partes
-separadas y coherentes, y cumple RNF-01.
+**Aceptación:** el hacha de prueba sale en 5–6 partes coherentes (mango, pomo, colgante, atadura,
+hoja + cabeza) en ~45 s extra con 6.4 GiB de VRAM; probado desde la CLI y desde el addon.
 
 ### M6 — Calidad
 
@@ -395,16 +403,17 @@ documentada).
 | D9 | Postproceso en un Blender aparte (background) | La interfaz no se congela y los fallos quedan aislados. |
 | D10 | `core/` solo con stdlib | Corre dentro de Blender sin instalar dependencias. |
 | D11 | Todo dentro del workspace | Orden y espacio: `/` tiene poco disco libre. |
+| D12 | P3-SAM como worker en venv aparte (no como nodo de ComfyUI) | Sus dependencias (spconv, numpy fijado) no se mezclan con las de ComfyUI; corre después de liberar la memoria de la generación. |
 
 ## 11. Riesgos
 
 | ID | Riesgo | Impacto | Mitigación |
 |---|---|---|---|
 | R1 | RAM insuficiente con Blender y el motor juntos | Alto | Un modelo a la vez, `/free` tras cada etapa, INT8, worker después de liberar, medir en cada benchmark. |
-| R2 | Hunyuan3D-Part no compila para `sm_120` | Alto | Spike temprano en M5; P3-SAM solo (segmentar sin completar) como alternativa. |
+| R2 | Hunyuan3D-Part no compila para `sm_120` | ~~Alto~~ Resuelto | P3-SAM corre sin compilar (ver M5). X-Part queda por evaluar. |
 | R3 | Calidad inferior a la esperada | Medio | Benchmark desde M1; varias semillas, multivista; modelos intercambiables. |
 | R4 | Steam actualiza Blender solo y cambia la API de `bpy` | Medio | Declarar la versión mínima en el manifiesto; tests del worker; revisar al actualizar. |
-| R5 | El Blender de Steam no puede ejecutar `docker` (entorno de Steam) | Medio | Verificarlo al inicio de M3; alternativa: lanzar Blender fuera de Steam o usar un servicio auxiliar. |
+| R5 | El Blender de Steam no puede ejecutar `docker` (entorno de Steam) | ~~Medio~~ Descartado | Verificado en M3: el Blender de Steam no usa contenedor de compatibilidad. |
 | R6 | Cambios en la API o los nodos de ComfyUI | Medio | Versión fijada; actualizar solo con los tests de integración en verde. |
 | R7 | Poco disco en `/` para Docker | Bajo | Imagen mínima (1 GB); todo lo demás en `engine/`. |
 | R8 | Licencias de modelos | Bajo (uso personal) | Licencia visible en el gestor; revisar antes de cualquier uso comercial. |

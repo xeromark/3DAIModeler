@@ -29,3 +29,13 @@ El proyecto usa [SemVer](https://semver.org/lang/es/).
 - Soporte de TRELLIS.2 (workflow y adaptador) como segundo modelo de generación.
 - Panel Modelos: descargar, borrar, uso de disco y variantes agregadas desde Hugging Face
   (revisión fijada, SHA-256 obligatorio, solo `.safetensors`).
+- Separación en partes con P3-SAM (Hunyuan3D-Part): etapa `parts` opcional, entorno aislado
+  (`./scripts/engine.sh setup-parts`), un objeto por parte en Blender; opción en el addon y en
+  la CLI (`generate --parts`).
+- Vistas previas con partes coloreadas (`render_preview.py ... --color-parts`).
+
+### Fixed
+
+- El addon detectaba el motor como "no instalado" con el motor detenido (el `python` del venv es
+  un enlace que solo existe dentro del contenedor).
+- El motor no se detenía al cerrar Blender.

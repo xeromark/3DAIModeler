@@ -51,6 +51,11 @@ class THREEDAI_Props(bpy.types.PropertyGroup):
     faces_custom: IntProperty(name="Caras", default=30_000, min=100, max=5_000_000, step=1000)
     random_seed: BoolProperty(name="Semilla aleatoria", default=True)
     seed: IntProperty(name="Semilla", default=42, min=0)
+    split_parts: BoolProperty(
+        name="Separar en partes",
+        description="Divide el modelo en partes (P3-SAM); cada parte es un objeto",
+        default=False,
+    )
     object_name: StringProperty(
         name="Nombre", description="Nombre del objeto (vacío: el nombre de la imagen)"
     )

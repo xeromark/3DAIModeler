@@ -7,6 +7,7 @@
 #   logs   -> muestra los logs
 #   shell  -> abre una terminal dentro del contenedor
 #   gpu    -> verifica la GPU
+#   setup-parts -> instala el soporte de partes (P3-SAM) en ./engine/parts
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -21,5 +22,6 @@ case "${1:-}" in
     logs)  docker compose logs -f engine ;;
     shell) docker compose run --rm engine bash ;;
     gpu)   docker compose run --rm engine python /scripts/gpu-check.py ;;
-    *)     sed -n '2,10p' "$0"; exit 1 ;;
+    setup-parts) docker compose run --rm engine bash /scripts/setup-parts.sh ;;
+    *)     sed -n '2,11p' "$0"; exit 1 ;;
 esac
