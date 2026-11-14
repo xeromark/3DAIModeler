@@ -17,7 +17,7 @@ package = false
 [tool.ruff]
 line-length = 100
 target-version = "py313"
-src = ["src", "worker", "tests"]
+src = ["src", "worker", "tests", "comfy_nodes"]
 extend-exclude = ["engine"]
 
 [tool.ruff.lint]

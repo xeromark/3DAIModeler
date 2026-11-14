@@ -396,8 +396,13 @@ class THREEDAI_PT_generate_advanced(_Base, bpy.types.Panel):
         col.prop(props, "q_texture_size")
         col.prop(props, "q_normal_size")
         col.prop(props, "q_ao_size")
-        if int(props.q_normal_size) > 4096 and props.q_remesh_resolution > 768:
-            text = "Normal map 8K con remesh alto puede no caber en 16 GB de VRAM."
+        usage = runtime.get().usage
+        vram_gb = usage.vram_total / GiB if usage and usage.vram_total else 16.0
+        if int(props.q_normal_size) > 4096 and vram_gb < 20:
+            text = (
+                f"El normal map 8K necesita ~12 GB de VRAM solo para hornearse: no cabe en "
+                f"tu GPU de {vram_gb:.0f} GB. Usa 4K."
+            )
             wrapped(layout, context, text, icon="ERROR")
 
         row = layout.row(align=True)

@@ -403,6 +403,7 @@ documentada).
 | D9 | Postproceso en un Blender aparte (background) | La interfaz no se congela y los fallos quedan aislados. |
 | D10 | `core/` solo con stdlib | Corre dentro de Blender sin instalar dependencias. |
 | D11 | Todo dentro del workspace | Orden y espacio: `/` tiene poco disco libre. |
+| D14 | Optimización de memoria medida (ver `docs/benchmarks/2026-11-14-optimizacion.md`) | `--cache-none` en el motor, nodo propio que libera la VRAM antes de hornear, P3-SAM en bf16, normal map tope 4K en GPUs de 16 GB. |
 | D13 | Sin edición de imagen ni texto → imagen dentro de la app | El usuario prepara o edita las imágenes con herramientas externas (Gemini, ChatGPT...); la app se enfoca en imagen → 3D. Evita ~12 GB y complejidad extra. |
 | D12 | P3-SAM como worker en venv aparte (no como nodo de ComfyUI) | Sus dependencias (spconv, numpy fijado) no se mezclan con las de ComfyUI; corre después de liberar la memoria de la generación. |
 

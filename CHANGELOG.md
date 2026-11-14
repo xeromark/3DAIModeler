@@ -57,6 +57,8 @@ El proyecto usa [SemVer](https://semver.org/lang/es/).
   CLI: `--quality custom --base max --set texture_size=8192 shape_steps=40`.
 - Exportar también **FBX** (texturas embebidas) y **OBJ** (con `.mtl`); las texturas se guardan
   junto al modelo como `model_color.png`, `model_normal.png` y `model_orm.png`.
+- Optimización de memoria: `--cache-none` en el motor (−2 GiB de RAM retenida, −1.6 GiB de VRAM
+  pico), nodo propio que libera la VRAM antes de hornear, P3-SAM en bf16 (32 % más rápido).
 - Panel **Estilos** (visualización en Blender, reversible): Anime / Cel shading (bandas de
   sombra y contorno por casco invertido), Blanco y negro, Colores saturados y Acuarela
   (compositor con filtro Kuwahara). Intensidad ajustable; se ve en el viewport y en el render, y

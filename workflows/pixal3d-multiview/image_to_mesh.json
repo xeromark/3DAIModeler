@@ -302,7 +302,7 @@
     "class_type": "RemeshMesh",
     "inputs": {
       "mesh": [
-        "shape_decode",
+        "free_vram",
         0
       ],
       "resolution": 768,
@@ -359,11 +359,11 @@
         0
       ],
       "voxel_colors": [
-        "texture_decode",
-        0
+        "free_vram",
+        1
       ],
       "reference_mesh": [
-        "shape_decode",
+        "free_vram",
         0
       ],
       "texture_size": 4096
@@ -622,6 +622,19 @@
       ],
       "right": [
         "crop_right",
+        0
+      ]
+    }
+  },
+  "free_vram": {
+    "class_type": "ThreeDAIFreeVRAM",
+    "inputs": {
+      "mesh": [
+        "shape_decode",
+        0
+      ],
+      "voxel": [
+        "texture_decode",
         0
       ]
     }

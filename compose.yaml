@@ -17,11 +17,15 @@ services:
     network_mode: host
     # --offline: sin nodos de pago en la nube (Meshy, Tripo...) y la interfaz
     # web no se conecta a internet. Las imágenes nunca salen del PC.
-    command: ["python", "ComfyUI/main.py", "--listen", "127.0.0.1", "--port", "8188", "--offline"]
+    # --cache-none: no guarda en RAM los resultados intermedios entre trabajos
+    # (cada trabajo es distinto): menos RAM retenida y menos VRAM pico, mismo tiempo.
+    command: ["python", "ComfyUI/main.py", "--listen", "127.0.0.1", "--port", "8188", "--offline", "--cache-none"]
     volumes:
       # El contenedor solo ve estas carpetas del proyecto, nada más de tu /home.
       - ./engine:/workspace
       - ./scripts/container:/scripts:ro
+      # Nodos propios (p. ej. liberar VRAM antes de hornear), solo lectura.
+      - ./comfy_nodes/threedai_nodes:/workspace/ComfyUI/custom_nodes/threedai_nodes:ro
     cap_drop:
       - ALL
     security_opt:

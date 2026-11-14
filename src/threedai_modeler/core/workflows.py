@@ -52,6 +52,7 @@ STAGE_LABELS: tuple[tuple[str, str], ...] = (
     ("shape", "Forma"),
     ("upsample", "Detalle"),
     ("texture", "Textura"),
+    ("free_vram", "Liberando VRAM"),
     ("remesh", "Malla"),
     ("decimate", "Reduciendo polígonos"),
     ("smooth", "Malla"),

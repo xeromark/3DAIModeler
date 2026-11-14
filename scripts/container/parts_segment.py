@@ -70,6 +70,12 @@ def main() -> None:
     parser.add_argument(
         "--prompt-batch", type=int, default=4, help="prompts por lote (más = más VRAM y velocidad)"
     )
+    parser.add_argument(
+        "--precision",
+        choices=("bf16", "fp32"),
+        default="bf16",
+        help="bf16: mitad de VRAM y más rápido; fp32: precisión completa",
+    )
     args = parser.parse_args()
 
     started = time.monotonic()
@@ -81,18 +87,20 @@ def main() -> None:
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     automask = load_automask(args.ckpt)
-    _aabb, face_ids, out_mesh = automask.predict_aabb(
-        mesh,
-        point_num=args.points,
-        prompt_num=args.prompts,
-        threshold=args.threshold,
-        post_process=True,
-        clean_mesh_flag=False,
-        is_parallel=False,
-        show_info=False,
-        seed=args.seed,
-        prompt_bs=args.prompt_batch,
-    )
+    autocast = torch.autocast("cuda", dtype=torch.bfloat16, enabled=args.precision == "bf16")
+    with autocast:
+        _aabb, face_ids, out_mesh = automask.predict_aabb(
+            mesh,
+            point_num=args.points,
+            prompt_num=args.prompts,
+            threshold=args.threshold,
+            post_process=True,
+            clean_mesh_flag=False,
+            is_parallel=False,
+            show_info=False,
+            seed=args.seed,
+            prompt_bs=args.prompt_batch,
+        )
     face_ids = np.asarray(face_ids)
     centers = np.asarray(out_mesh.triangles_center, dtype=np.float32)
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -106,6 +114,7 @@ def main() -> None:
         "largest_part_faces": int(counts.max()) if len(counts) else 0,
         "seconds": round(time.monotonic() - started, 1),
         "peak_vram_gib": round(torch.cuda.max_memory_allocated() / 1024**3, 2),
+        "precision": args.precision,
     }
     print("RESULT " + json.dumps(result))
 
