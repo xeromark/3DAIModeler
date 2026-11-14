@@ -1,0 +1,37 @@
+[project]
+name = "threedai-modeler"
+version = "0.1.0"
+description = "Blender extension for local AI image-to-3D generation"
+readme = "README.md"
+# Igual que el Python que trae Blender 5.x.
+requires-python = ">=3.13"
+# El código del addon usa solo la biblioteca estándar (ver docs/PLAN.md, D10).
+dependencies = []
+
+[dependency-groups]
+dev = ["ruff", "pytest", "mypy"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "worker", "tests"]
+extend-exclude = ["engine"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF", "PTH"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = ["integration: requiere el motor corriendo y GPU (se ejecuta solo en local)"]
+addopts = "-m 'not integration'"
+
+[tool.mypy]
+python_version = "3.13"
+files = ["src/threedai_modeler/core"]
+mypy_path = "src"
+strict = true
+cache_dir = "engine/.cache/mypy"

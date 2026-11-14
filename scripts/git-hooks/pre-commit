@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Bloquea el commit si lint, formato, tipos o tests unitarios fallan.
+exec "$(git rev-parse --show-toplevel)/scripts/dev.sh" check

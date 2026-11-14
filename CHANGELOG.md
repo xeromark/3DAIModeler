@@ -1,0 +1,16 @@
+# Changelog
+
+Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
+El proyecto usa [SemVer](https://semver.org/lang/es/).
+
+## [Unreleased]
+
+### Added
+
+- Motor en Docker: ComfyUI 0.45.3, PyTorch 2.14.1 + CUDA 13.0, modo `--offline`, solo `127.0.0.1`.
+- `scripts/engine.sh` para construir, instalar, arrancar y detener el motor.
+- `scripts/dev.sh` y hook de pre-commit: ruff, mypy y pytest.
+- Esqueleto de la extensión de Blender y `core/paths.py`.
+- Lockfile de dependencias del motor.
+- CI con lint, tipos y tests unitarios.
+- Plan de desarrollo en `docs/PLAN.md`.

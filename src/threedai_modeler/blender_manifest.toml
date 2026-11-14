@@ -1,0 +1,16 @@
+schema_version = "1.0.0"
+
+id = "threedai_modeler"
+version = "0.1.0"
+name = "3DAI Modeler"
+tagline = "Local AI image-to-3D generation with parts and polycount control"
+maintainer = "xeromark"
+type = "add-on"
+
+blender_version_min = "5.0.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+
+[permissions]
+files = "Manage the engine, models and generated assets in the workspace"
+network = "Download models and talk to the local engine on 127.0.0.1"

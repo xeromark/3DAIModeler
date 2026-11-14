@@ -1,0 +1,9 @@
+# Todo lo que se instala o descarga en el motor (ComfyUI, venv, modelos, cachés)
+/engine/*
+!/engine/.gitkeep
+
+__pycache__/
+*.pyc
+*.blend1
+
+.venv/

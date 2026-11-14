@@ -1,0 +1,30 @@
+name: 3daimodeler
+
+services:
+  engine:
+    build:
+      context: docker
+      dockerfile: engine.Dockerfile
+      # La red "bridge" de Docker no tiene salida a internet en este PC
+      # (fallo de reglas iptables de Docker). Se usa la red del host.
+      network: host
+    image: 3daimodeler-engine:dev
+    # Corre con tu usuario, no como root. engine.sh exporta HOST_UID/HOST_GID.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    gpus: all
+    # Red del host: ComfyUI escucha solo en 127.0.0.1 (ver CMD del Dockerfile),
+    # así que solo es accesible desde este PC.
+    network_mode: host
+    # --offline: sin nodos de pago en la nube (Meshy, Tripo...) y la interfaz
+    # web no se conecta a internet. Las imágenes nunca salen del PC.
+    command: ["python", "ComfyUI/main.py", "--listen", "127.0.0.1", "--port", "8188", "--offline"]
+    volumes:
+      # El contenedor solo ve estas carpetas del proyecto, nada más de tu /home.
+      - ./engine:/workspace
+      - ./scripts/container:/scripts:ro
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    shm_size: 2gb
+    restart: "no"
