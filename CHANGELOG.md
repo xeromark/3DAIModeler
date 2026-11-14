@@ -20,3 +20,5 @@ El proyecto usa [SemVer](https://semver.org/lang/es/).
 - Trabajos por etapas guardados en disco y reanudables; métricas de tiempo, RAM y VRAM.
 - CLI: `generate`, `resume`, `jobs`, `preview`, `models list|download|remove`.
 - Render de vistas previas con Blender en background (`worker/render_preview.py`).
+- Etapa `postprocess`: GLB -> `.blend` con texturas empaquetadas, objeto nombrado, origen en la
+  base y verificación de polígonos (`worker/postprocess.py`).

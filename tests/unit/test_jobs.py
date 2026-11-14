@@ -18,6 +18,7 @@ def test_create_copies_input_and_saves(tmp_path: Path) -> None:
     ws, job = make_job(tmp_path)
     assert job.input_path.read_bytes() == b"png"
     assert job.input_path.name == "input.png"
+    assert job.name == "foto"
     assert set(job.stages) == set(STAGES)
     assert (ws.jobs_dir / job.id / "job.json").is_file()
 
@@ -28,6 +29,7 @@ def test_roundtrip_keeps_stage_state(tmp_path: Path) -> None:
     rec.status = StageStatus.DONE
     rec.outputs["glb"] = "generate/model.glb"
     rec.metrics["seconds"] = 12.5
+    job.stages["postprocess"].status = StageStatus.DONE
     job.save()
 
     loaded = Job.load(ws, job.id)

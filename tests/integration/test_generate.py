@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from threedai_modeler.core.comfy import ComfyClient
-from threedai_modeler.core.jobs import Job, StageStatus
+from threedai_modeler.core.jobs import Job
 from threedai_modeler.core.paths import Workspace
 from threedai_modeler.core.pipeline import Pipeline
 from threedai_modeler.core.presets import Presets
@@ -39,8 +39,13 @@ def test_draft_generation_produces_glb(ws: Workspace) -> None:
     )
     Pipeline(ws, registry, presets, ComfyClient()).run(job)
 
-    record = Job.load(ws, job.id).stages["generate"]
-    assert record.status is StageStatus.DONE
-    glb = job.output_path("generate", "glb")
+    loaded = Job.load(ws, job.id)
+    assert loaded.is_done
+    glb = loaded.output_path("generate", "glb")
     assert glb is not None and glb.read_bytes()[:4] == b"glTF"
-    assert record.metrics["seconds"] > 0
+    blend = loaded.output_path("postprocess", "blend")
+    assert blend is not None and blend.is_file()
+    post = loaded.stages["postprocess"].metrics
+    assert post["faces_within_tolerance"]
+    assert post["packed_images"] >= 1
+    assert {"Base Color", "Normal"} <= set(next(iter(post["materials"].values())))

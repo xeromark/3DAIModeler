@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
+from .blender import find_blender, run_worker
 from .comfy import ComfyClient, Event
 from .jobs import Job, StageRecord, StageStatus
 from .monitor import ResourceMonitor
@@ -54,18 +57,27 @@ class _Timer:
 
 class Pipeline:
     def __init__(
-        self, ws: Workspace, registry: Registry, presets: Presets, client: ComfyClient
+        self,
+        ws: Workspace,
+        registry: Registry,
+        presets: Presets,
+        client: ComfyClient,
+        blender: Path | None = None,
     ) -> None:
         self.ws = ws
         self.registry = registry
         self.presets = presets
         self.client = client
+        self.blender = blender
+        """Ejecutable de Blender para el postproceso (en el addon: bpy.app.binary_path)."""
 
     def check_ready(self, job: Job) -> None:
-        if self.registry.state(self.ws, job.model_id) is not ModelState.INSTALLED:
-            raise PipelineError(f"el modelo {job.model_id} no está descargado")
-        if not self.client.is_ready():
-            raise PipelineError(f"el motor no responde en {self.client.base_url}")
+        if job.stages["generate"].status is not StageStatus.DONE:
+            if self.registry.state(self.ws, job.model_id) is not ModelState.INSTALLED:
+                raise PipelineError(f"el modelo {job.model_id} no está descargado")
+            if not self.client.is_ready():
+                raise PipelineError(f"el motor no responde en {self.client.base_url}")
+        self.blender = find_blender(self.blender)
 
     def run(
         self,
@@ -74,7 +86,7 @@ class Pipeline:
         cancel: threading.Event | None = None,
     ) -> Job:
         self.check_ready(job)
-        steps = {"generate": self._generate}
+        steps = {"generate": self._generate, "postprocess": self._postprocess}
         for name, record in job.stages.items():
             if record.status is StageStatus.DONE:
                 continue
@@ -151,3 +163,27 @@ class Pipeline:
         self.client.download(files[0], dest)
         record.outputs = {"glb": str(dest.relative_to(job.dir))}
         record.metrics = {**monitor.as_dict(), "stage_seconds": timer.rounded()}
+
+    def _postprocess(
+        self,
+        job: Job,
+        record: StageRecord,
+        on_progress: ProgressFn | None,
+        _cancel: threading.Event | None,
+    ) -> None:
+        if on_progress:
+            on_progress(Progress("postprocess", "Creando .blend"))
+        glb = job.output_path("generate", "glb")
+        if glb is None or not glb.is_file():
+            raise PipelineError("falta el GLB de la etapa generate")
+        blend = job.dir / "postprocess" / "model.blend"
+        assert self.blender is not None  # lo resuelve check_ready
+        args = [str(glb), str(blend), "--name", job.name, "--target-faces", str(job.target_faces)]
+        started = time.monotonic()
+        result = run_worker(self.blender, self.ws.worker_dir / "postprocess.py", args, timeout=1800)
+        line = next((ln for ln in result.stdout.splitlines() if ln.startswith("RESULT ")), None)
+        if line is None:
+            raise PipelineError("el worker de Blender no devolvió resultado")
+        info: dict[str, Any] = json.loads(line.removeprefix("RESULT "))
+        record.outputs = {"blend": str(blend.relative_to(job.dir))}
+        record.metrics = {**info, "seconds": round(time.monotonic() - started, 1)}

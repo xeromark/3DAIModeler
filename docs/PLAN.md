@@ -304,11 +304,17 @@ Cada hito termina con algo usable, tests en verde y criterios de aceptación cum
 **Aceptación:** `python -m threedai_modeler.cli generate foto.png` produce un GLB texturizado.
 El pico de RAM cumple RNF-01 y queda medido.
 
-### M2 — Postproceso en Blender
+### M2 — Postproceso en Blender *(completo)*
 
-- `worker/postprocess.py`: importa el GLB, limpia la malla, reduce polígonos (decimate o QuadriFlow
-  según el preset), despliega UVs, hornea normal map y albedo (alta → baja) y guarda el `.blend`.
-- `models/presets.toml`: presets de polígonos y tamaño de textura.
+- [x] Reducción de polígonos, UVs y bake alta → baja (color, metálico, rugosidad, normal, AO):
+  se hacen dentro del motor con los nodos nativos de ComfyUI (`DecimateMesh`, `UnwrapMesh`,
+  `BakeNormalMapFromMesh`...), así que Blender no necesita repetirlos.
+- [x] `worker/postprocess.py`: importa el GLB, aplana la jerarquía, aplica transformaciones,
+  origen abajo al centro, sombreado suave, nombra objetos y materiales, empaqueta texturas,
+  verifica polígonos y guarda el `.blend`.
+- [x] `models/presets.toml`: presets de polígonos y tamaño de textura.
+- [x] Etapa `postprocess` en el pipeline, reanudable.
+- [ ] Retopología en quads (QuadriFlow) como opción: se evalúa en M6 con el benchmark.
 
 **Aceptación:** los polígonos quedan dentro de ±5 % del objetivo. El `.blend` abre con texturas
 empaquetadas. La comparación visual entre alta y baja queda registrada en el benchmark.

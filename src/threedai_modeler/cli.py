@@ -87,13 +87,20 @@ def _run_job(ws: Workspace, reg: Registry, job: Job) -> int:
         cancel.set()
         print("Cancelado. Reanudar con: resume", job.id)
         return 130
-    except (PipelineError, ComfyError) as err:
+    except (PipelineError, ComfyError, BlenderNotFoundError, WorkerError) as err:
         print(f"Error: {err}", file=sys.stderr)
         print(f"Reanudar con: resume {job.id}", file=sys.stderr)
         return 1
-    glb = job.output_path("generate", "glb")
-    print(f"Listo: {glb}")
-    print(json.dumps(job.stages["generate"].metrics, indent=2, ensure_ascii=False))
+    print(f"Listo: {job.output_path('postprocess', 'blend')}")
+    metrics = {name: rec.metrics for name, rec in job.stages.items()}
+    print(json.dumps(metrics, indent=2, ensure_ascii=False))
+    post = job.stages["postprocess"].metrics
+    if post and not post.get("faces_within_tolerance", True):
+        print(
+            f"Aviso: {post['faces']} caras (objetivo {post['target_faces']}): "
+            "la malla original tenía menos detalle que el objetivo.",
+            file=sys.stderr,
+        )
     return 0
 
 
@@ -113,6 +120,7 @@ def cmd_generate(ws: Workspace, reg: Registry, args: argparse.Namespace) -> int:
         quality=args.quality,
         target_faces=presets.resolve_faces(args.faces),
         seed=args.seed if args.seed is not None else random.randrange(2**31),
+        name=args.name,
     )
     return _run_job(ws, reg, job)
 
@@ -164,6 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--quality", default="standard", help="draft | standard | max")
     gen.add_argument("--faces", default="medium", help="low | medium | high | ultra | número")
     gen.add_argument("--seed", type=int)
+    gen.add_argument("--name", help="nombre del objeto en Blender (por defecto, el de la imagen)")
     gen.set_defaults(fn=cmd_generate)
 
     res = sub.add_parser("resume", help="reanudar un trabajo interrumpido")
