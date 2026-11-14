@@ -10,3 +10,6 @@ __pycache__/
 
 # Índice que Blender crea en un repositorio local de extensiones
 /src/.blender_ext/
+
+# Imágenes de benchmark del usuario (material propio, no se publica)
+/examples/
