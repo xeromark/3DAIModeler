@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from threedai_modeler.core.jobs import STAGES, Job, JobError, StageStatus
+from threedai_modeler.core.jobs import STAGES, Job, JobError, StageStatus, estimate
 from threedai_modeler.core.paths import Workspace
 
 
@@ -78,3 +78,22 @@ def test_old_job_without_parts_stage_is_still_done(tmp_path: Path) -> None:
     loaded = Job.load(ws, job.id)
     assert loaded.is_done
     assert loaded.stages["parts"].metrics == {"skipped": True}
+
+
+def test_estimate_uses_matching_finished_jobs(tmp_path: Path) -> None:
+    _ws, a = make_job(tmp_path)
+    jobs = [a]
+    for seconds in (100.0, 80.0, 300.0):
+        sub = tmp_path / str(seconds)
+        sub.mkdir()
+        _, job = make_job(sub)
+        jobs.append(job)
+        for record in job.stages.values():
+            record.status = StageStatus.DONE
+        job.stages["generate"].metrics = {"seconds": seconds, "peak_vram_gib": 9.0}
+        job.stages["parts"].metrics = {"seconds": 40.0, "peak_vram_gib": 6.4}
+    plain = estimate(jobs, "m", "draft", parts=False)
+    assert plain is not None and plain.seconds == 100.0 and plain.samples == 3
+    with_parts = estimate(jobs, "m", "draft", parts=True)
+    assert with_parts is not None and with_parts.seconds == 140.0
+    assert estimate(jobs, "m", "max", parts=False) is None

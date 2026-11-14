@@ -7,6 +7,7 @@ no cambie (RNF-08). El estado siempre se detecta, nunca se supone.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -21,6 +22,7 @@ from .paths import Workspace
 
 LogFn = Callable[[str], None]
 IMAGE = "3daimodeler-engine:dev"
+CONTAINER = "3daimodeler-engine-1"
 NO_DOCKER = "Docker no está instalado. Instálalo junto con nvidia-container-toolkit."
 STEAM_NO_SOCKET = (
     "Blender abierto desde Steam no puede usar Docker: el contenedor de Steam oculta su socket. "
@@ -64,6 +66,8 @@ class Runner(Protocol):
 
     def parts_installed(self) -> bool: ...
     def install_parts(self, log: LogFn, cancel: threading.Event | None = None) -> None: ...
+    def engine_memory(self) -> int | None:
+        """RAM que usa el motor en bytes, o None si no se puede medir."""
 
 
 HOST_DOCKER = "/run/host/usr/bin/docker"
@@ -197,6 +201,13 @@ class DockerRunner:
     def run_tool(self, args: list[str], timeout: float = 3600) -> str:
         return self._checked(self._compose("exec", "-T", SERVICE, *args), timeout=timeout)
 
+    def engine_memory(self) -> int | None:
+        fmt = "{{.MemUsage}}"
+        result = self._run([self.docker, "stats", "--no-stream", "--format", fmt, CONTAINER])
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+        return parse_size(result.stdout.split("/")[0])
+
     def parts_installed(self) -> bool:
         parts = self.ws.engine_dir / "parts"
         return (
@@ -287,3 +298,22 @@ def engine_disk_usage(ws: Workspace) -> int:
             if not path.is_symlink():
                 total += path.stat().st_size
     return total
+
+
+_UNITS = {
+    "b": 1,
+    "kib": 1024,
+    "mib": 1024**2,
+    "gib": 1024**3,
+    "kb": 1000,
+    "mb": 1000**2,
+    "gb": 1000**3,
+}
+
+
+def parse_size(text: str) -> int | None:
+    """'2.323GiB' -> bytes."""
+    m = re.fullmatch(r"\s*([\d.]+)\s*([A-Za-z]+)\s*", text)
+    if not m or m.group(2).lower() not in _UNITS:
+        return None
+    return int(float(m.group(1)) * _UNITS[m.group(2).lower()])

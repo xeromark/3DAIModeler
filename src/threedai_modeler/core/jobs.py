@@ -158,3 +158,32 @@ def _stage_for_old_job(stage: str, data: dict[str, Any]) -> StageRecord:
     if stage == "parts" and not data.get("parts", False):
         return StageRecord(status=StageStatus.DONE, metrics={"skipped": True})
     return StageRecord()
+
+
+@dataclass(frozen=True)
+class Estimate:
+    seconds: float
+    peak_vram_gib: float
+    samples: int
+
+
+def estimate(jobs: list[Job], model_id: str, quality: str, parts: bool) -> Estimate | None:
+    """Tiempo típico (mediana) y VRAM máxima de trabajos parecidos ya terminados."""
+    times: list[float] = []
+    vram = 0.0
+    for job in jobs:
+        if job.model_id != model_id or job.quality != quality or not job.is_done:
+            continue
+        gen = job.stages["generate"].metrics
+        part = job.stages["parts"].metrics
+        if not gen.get("seconds"):
+            continue
+        extra = float(part.get("seconds", 0)) if parts and not part.get("skipped") else 0.0
+        if parts and part.get("skipped"):
+            continue  # sin datos de partes para comparar
+        times.append(float(gen["seconds"]) + extra)
+        vram = max(vram, float(gen.get("peak_vram_gib", 0)), float(part.get("peak_vram_gib", 0)))
+    if not times:
+        return None
+    times.sort()
+    return Estimate(times[len(times) // 2], vram, len(times))

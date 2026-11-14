@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -11,9 +12,11 @@ from bpy.props import BoolProperty, EnumProperty, StringProperty
 
 from ..core.engine import EngineState
 from ..core.jobs import Job
+from ..core.local_models import ImportMode, import_local
 from ..core.pipeline import PARTS_MODEL, Pipeline, Progress
-from ..core.registry import APPROVED_ORGS, ModelState, fetch_hf_file
+from ..core.registry import APPROVED_ORGS, ModelState, fetch_hf_file, list_hf_safetensors
 from ..core.tasks import Task, TaskBusyError, TaskContext, TaskStatus
+from ..core.workflows import BUILDERS
 from . import prefs, runtime
 
 
@@ -186,6 +189,25 @@ class THREEDAI_OT_model_remove(bpy.types.Operator):
         return {"FINISHED"}
 
 
+NO_FILE = "__none__"
+_repo_cache: dict[str, tuple[list[tuple[str, str, str]], str]] = {}
+"""repo -> (opciones del menú de archivos, error). Blender exige mantener viva la lista."""
+
+
+def _repo_file_items(self: Any, _context: Any) -> list[tuple[str, str, str]]:
+    repo = self.repo.strip()
+    if "/" not in repo:
+        return [(NO_FILE, "Escribe el repositorio primero", "")]
+    if repo not in _repo_cache:
+        try:
+            files = list_hf_safetensors(repo, timeout=8)
+            items = [(p, f"{p}  ({size / 1e9:.1f} GB)", p) for p, size in files]
+            _repo_cache[repo] = (items or [(NO_FILE, "Sin archivos .safetensors", "")], "")
+        except ValueError as err:
+            _repo_cache[repo] = ([(NO_FILE, "No se pudo leer el repositorio", "")], str(err))
+    return _repo_cache[repo][0]
+
+
 FAMILY_ITEMS = [
     ("pixal3d", "Pixal3D", "Variante de Pixal3D (pesos de difusión)"),
     ("trellis2", "TRELLIS.2", "Variante de TRELLIS.2 (pesos de difusión)"),
@@ -202,7 +224,7 @@ class THREEDAI_OT_variant_add(bpy.types.Operator):
 
     family: EnumProperty(name="Familia", items=FAMILY_ITEMS)
     repo: StringProperty(name="Repositorio", description="organizacion/nombre en Hugging Face")
-    path: StringProperty(name="Archivo", description="Ruta del .safetensors dentro del repo")
+    path: EnumProperty(name="Archivo", items=_repo_file_items)
     name: StringProperty(name="Nombre", description="Nombre visible, p. ej. 'bf16'")
     precision: StringProperty(name="Precisión", default="bf16")
     license: StringProperty(name="Licencia", default="desconocida")
@@ -216,7 +238,10 @@ class THREEDAI_OT_variant_add(bpy.types.Operator):
 
     def draw(self, _context: bpy.types.Context) -> None:
         col = self.layout.column()
-        for prop in ("family", "repo", "path", "name", "precision", "license"):
+        col.prop(self, "repo")
+        if _repo_cache.get(self.repo.strip(), ([], ""))[1]:
+            col.label(text=_repo_cache[self.repo.strip()][1], icon="ERROR")
+        for prop in ("path", "family", "name", "precision", "license"):
             col.prop(self, prop)
         org = self.repo.split("/", 1)[0]
         if org and org not in APPROVED_ORGS:
@@ -227,9 +252,9 @@ class THREEDAI_OT_variant_add(bpy.types.Operator):
 
     def execute(self, _context: bpy.types.Context) -> set[str]:
         rt = runtime.get()
-        repo, path = self.repo.strip(), self.path.strip()
+        repo, path = self.repo.strip(), self.path
         name = self.name.strip() or Path(path).stem
-        if not repo or not path:
+        if not repo or path == NO_FILE:
             self.report({"ERROR"}, "Indica el repositorio y el archivo")
             return {"CANCELLED"}
         if repo.split("/", 1)[0] not in APPROVED_ORGS and not self.trust_org:
@@ -308,11 +333,12 @@ class THREEDAI_OT_generate(bpy.types.Operator):
     def execute(self, context: bpy.types.Context) -> set[str]:
         rt = runtime.get()
         props = context.scene.threedai
+        model_id = prefs.generation_model_id(context)
         image = Path(bpy.path.abspath(props.image))
         if not image.is_file():
             self.report({"ERROR"}, "Elige una imagen")
             return {"CANCELLED"}
-        if rt.registry.state(rt.ws, props.model_id) is not ModelState.INSTALLED:
+        if not model_id or rt.registry.state(rt.ws, model_id) is not ModelState.INSTALLED:
             self.report({"ERROR"}, "Descarga el modelo primero")
             return {"CANCELLED"}
         preferences = prefs.get(context)
@@ -336,7 +362,7 @@ class THREEDAI_OT_generate(bpy.types.Operator):
         job = Job.create(
             rt.ws,
             image,
-            model_id=props.model_id,
+            model_id=model_id,
             quality=props.quality,
             target_faces=target_faces,
             seed=random.randrange(2**31) if props.random_seed else props.seed,
@@ -449,6 +475,138 @@ class THREEDAI_OT_dismiss_error(bpy.types.Operator):
         return {"FINISHED"}
 
 
+_generation_item_cache: list[tuple[str, str, str]] = []
+
+
+def _generation_items(_self: Any = None, _context: Any = None) -> list[tuple[str, str, str]]:
+    global _generation_item_cache
+    rt = runtime.get()
+    items = []
+    for m in rt.registry.models.values():
+        if m.family not in BUILDERS:
+            continue
+        installed = rt.model_states.get(m.id) is ModelState.INSTALLED
+        label = m.name if installed else f"{m.name} (sin descargar)"
+        items.append((m.id, label, f"{m.family} · {m.precision} · {m.license}"))
+    _generation_item_cache = items or [(NO_FILE, "Sin modelos", "")]
+    return _generation_item_cache
+
+
+class THREEDAI_OT_select_model(bpy.types.Operator):
+    bl_idname = "threedai.select_model"
+    bl_label = "Elegir modelo de generación"
+    bl_description = "Modelo que se usa para generar (forma + textura)"
+    bl_property = "model_id"
+
+    model_id: EnumProperty(name="Modelo", items=_generation_items)
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        preferences = prefs.get(context)
+        if preferences is not None:
+            preferences.generation_model = self.model_id
+        runtime.get().version += 1
+        return {"FINISHED"}
+
+
+class THREEDAI_OT_model_import_file(bpy.types.Operator):
+    bl_idname = "threedai.model_import_file"
+    bl_label = "Agregar modelo desde archivo"
+    bl_description = (
+        "Agrega un .safetensors de tu PC: reconoce la arquitectura leyendo solo su cabecera "
+        "y, si es un archivo oficial, lo instala sin volver a descargarlo"
+    )
+
+    filepath: StringProperty(subtype="FILE_PATH")
+    filter_glob: StringProperty(default="*.safetensors", options={"HIDDEN"})
+    mode: EnumProperty(
+        name="Archivo original",
+        items=[
+            ("move", "Mover", "Lo mueve al proyecto (instantáneo en el mismo disco)"),
+            ("copy", "Copiar", "Deja el original donde está (usa el doble de espacio)"),
+        ],
+        default="move",
+    )
+    name: StringProperty(name="Nombre", description="Nombre visible (vacío: el del archivo)")
+    license: StringProperty(name="Licencia", default="desconocida")
+
+    def invoke(self, context: bpy.types.Context, _event: bpy.types.Event) -> set[str]:
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def draw(self, _context: bpy.types.Context) -> None:
+        col = self.layout.column()
+        col.prop(self, "mode")
+        col.prop(self, "name")
+        col.prop(self, "license")
+
+    def execute(self, _context: bpy.types.Context) -> set[str]:
+        rt = runtime.get()
+        src = Path(self.filepath)
+        mode, name, license_ = ImportMode(self.mode), self.name.strip(), self.license.strip()
+
+        def work(ctx: TaskContext) -> str:
+            result = import_local(
+                rt.ws,
+                rt.registry,
+                src,
+                mode=mode,
+                name=name,
+                license=license_,
+                progress=ctx.report,
+                cancel=ctx.cancel,
+            )
+            names = ", ".join(rt.registry.model(m).name for m in result.model_ids)
+            if result.official:
+                return f"Archivo oficial reconocido: {names} quedó instalado"
+            return f"Agregado: {names} ({result.family}, {result.precision})"
+
+        def done(task: Task) -> None:
+            _refresh_after(task)
+            rt.reload_registry()
+            if task.status is TaskStatus.DONE:
+                task.message = str(task.result)
+
+        return _start(self, "download", f"Agregar {src.name}", work, done)
+
+
+class THREEDAI_OT_job_open_folder(bpy.types.Operator):
+    bl_idname = "threedai.job_open_folder"
+    bl_label = "Abrir carpeta"
+    bl_description = "Abre la carpeta del trabajo (GLB, .blend, imagen original)"
+
+    job_id: StringProperty()
+
+    def execute(self, _context: bpy.types.Context) -> set[str]:
+        folder = runtime.get().ws.jobs_dir / self.job_id
+        bpy.ops.wm.path_open(filepath=str(folder))
+        return {"FINISHED"}
+
+
+class THREEDAI_OT_job_delete(bpy.types.Operator):
+    bl_idname = "threedai.job_delete"
+    bl_label = "Borrar trabajo"
+    bl_description = "Borra el trabajo y sus archivos del disco (no afecta lo ya importado)"
+
+    job_id: StringProperty()
+
+    def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> set[str]:
+        return context.window_manager.invoke_confirm(self, event)
+
+    def execute(self, _context: bpy.types.Context) -> set[str]:
+        rt = runtime.get()
+        gen = rt.tasks.get("generate")
+        if gen is not None and gen.running:
+            self.report({"WARNING"}, "Hay una generación en curso")
+            return {"CANCELLED"}
+        folder = (rt.ws.jobs_dir / self.job_id).resolve()
+        if folder.parent != rt.ws.jobs_dir.resolve() or not (folder / "job.json").is_file():
+            self.report({"ERROR"}, "Trabajo inválido")
+            return {"CANCELLED"}
+        shutil.rmtree(folder)
+        rt.refresh()
+        return {"FINISHED"}
+
+
 CLASSES = (
     THREEDAI_OT_engine_install,
     THREEDAI_OT_engine_start,
@@ -464,4 +622,8 @@ CLASSES = (
     THREEDAI_OT_job_import,
     THREEDAI_OT_job_resume,
     THREEDAI_OT_dismiss_error,
+    THREEDAI_OT_select_model,
+    THREEDAI_OT_model_import_file,
+    THREEDAI_OT_job_open_folder,
+    THREEDAI_OT_job_delete,
 )

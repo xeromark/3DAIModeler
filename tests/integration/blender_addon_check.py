@@ -52,10 +52,61 @@ print("ENGINE", rt.engine_state, rt.engine_message)
 print("MODELS", {k: v.value for k, v in rt.model_states.items()})
 assert bpy.ops.threedai.engine_logs() == {"FINISHED"}
 
+
+# Dibujo de todos los paneles con un layout simulado (en background no hay interfaz).
+class FakeLayout:
+    def __getattr__(self, name: str) -> object:
+        if name in ("enabled", "alert", "scale_y", "active"):
+            return True
+        return lambda *a, **k: FakeLayout()
+
+    def __setattr__(self, name: str, value: object) -> None:
+        pass
+
+
+class FakeRegion:
+    width = 300
+
+
+class FakeContext:
+    def __getattr__(self, name: str) -> object:
+        return getattr(bpy.context, name)
+
+    region = FakeRegion()
+
+
+panels = sys.modules[module + ".ui.panels"]
+for show_parts in (False, True):
+    bpy.context.scene.threedai.split_parts = show_parts
+    bpy.context.scene.threedai.image = str(workspace / "engine" / "samples" / "viking_axe.png")
+    for cls in panels.CLASSES:
+
+        class FakePanel:
+            layout = FakeLayout()
+            panel_cls = cls
+
+            def __getattr__(self, name: str) -> object:
+                return getattr(self.panel_cls, name)
+
+        cls.draw(FakePanel(), FakeContext())
+bpy.context.scene.threedai.split_parts = False
+print("PANELS_DRAW_OK", len(panels.CLASSES))
+
+assert bpy.ops.threedai.select_model(model_id="trellis2-int8") == {"FINISHED"}
+prefs_mod = sys.modules[module + ".ui.prefs"]
+assert prefs_mod.generation_model_id() == "trellis2-int8"
+assert bpy.ops.threedai.select_model(model_id="pixal3d-int8") == {"FINISHED"}
+print("SELECT_MODEL_OK", prefs_mod.generation_model_id())
+print("USAGE", rt.usage, rt.engine_ram)
+
 # Variante de modelo: consulta real a Hugging Face (sin descargar los pesos).
 user_registry = rt.ws.user_registry_file
 backup = user_registry.read_bytes() if user_registry.exists() else None
 try:
+    ops_mod = sys.modules[module + ".ui.ops"]
+    files = ops_mod._repo_file_items(type("P", (), {"repo": "Comfy-Org/TRELLIS.2"})(), None)
+    assert any("trellis_2_bf16" in f[0] for f in files), files
+    print("HF_FILES", [f[0] for f in files])
     assert bpy.ops.threedai.variant_add(
         "EXEC_DEFAULT",
         family="trellis2",
@@ -83,7 +134,7 @@ finally:
 if image is not None:
     props = bpy.context.scene.threedai
     props.image = str(image)
-    props.model_id = "pixal3d-int8"
+    bpy.context.preferences.addons[module].preferences.generation_model = "pixal3d-int8"
     props.quality = "draft"
     props.faces = "custom"
     props.faces_custom = 5000

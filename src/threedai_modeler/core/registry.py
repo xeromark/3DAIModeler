@@ -22,6 +22,9 @@ HF_BASE_URL = "https://huggingface.co"
 USER_AGENT = "threedai-modeler"
 CHUNK = 4 * 1024 * 1024
 
+LOCAL_REPO = "local"
+"""`repo` de los archivos agregados desde el PC."""
+
 APPROVED_ORGS = frozenset({"Comfy-Org", "microsoft", "tencent", "TencentARC", "Tencent-Hunyuan"})
 """Organizaciones de Hugging Face aceptadas sin advertencia."""
 
@@ -75,6 +78,11 @@ class FileSpec:
     @property
     def is_safe_format(self) -> bool:
         return self.filename.endswith(SAFE_SUFFIXES)
+
+    @property
+    def is_local(self) -> bool:
+        """Agregado desde un archivo del PC: no se puede volver a descargar."""
+        return self.repo == LOCAL_REPO
 
 
 @dataclass(frozen=True)
@@ -194,6 +202,10 @@ class Registry:
         total = sum(f.size for f in pending)
         done = 0
         for spec in pending:
+            if spec.is_local:
+                raise DownloadError(
+                    f"{spec.filename} se agregó desde un archivo y ya no está; vuelve a agregarlo"
+                )
 
             def on_file(n: int, _total: int, base: int = done) -> None:
                 if progress:
@@ -255,6 +267,12 @@ class Registry:
         self.models[model.id] = model
         self.validate()
         self.save_user(ws.user_registry_file)
+
+    def find_by_hash(self, sha256: str, size: int) -> FileSpec | None:
+        return next((f for f in self.files.values() if f.sha256 == sha256 and f.size == size), None)
+
+    def models_using(self, file_id: str) -> list[ModelSpec]:
+        return [m for m in self.models.values() if file_id in m.files]
 
     def remove_user_variant(self, ws: Workspace, model_id: str) -> list[Path]:
         model = self.model(model_id)
@@ -353,6 +371,27 @@ def fetch_hf_file(
         "sha256": lfs["sha256"],
     }
     return _parse_file(_slug(f"user-{repo}-{PurePosixPath(path).stem}"), raw)
+
+
+def list_hf_safetensors(repo: str, timeout: float = 15) -> list[tuple[str, int]]:
+    """Archivos .safetensors de un repositorio de Hugging Face: (ruta, tamaño)."""
+    if not re.fullmatch(r"[A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*", repo) or ".." in repo:
+        raise RegistryError(f"repositorio inválido: {repo!r} (formato: organizacion/nombre)")
+    request = urllib.request.Request(
+        f"{HF_BASE_URL}/api/models/{repo}?blobs=true", headers={"User-Agent": USER_AGENT}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as resp:
+            info = json.load(resp)
+    except urllib.error.HTTPError as err:
+        raise RegistryError(f"no se pudo leer {repo} (HTTP {err.code})") from err
+    except (urllib.error.URLError, OSError) as err:
+        raise RegistryError(f"sin conexión con Hugging Face: {err}") from err
+    return sorted(
+        (str(s["rfilename"]), int((s.get("lfs") or {}).get("size") or s.get("size") or 0))
+        for s in info.get("siblings", [])
+        if str(s.get("rfilename", "")).endswith(SAFE_SUFFIXES)
+    )
 
 
 def _slug(text: str) -> str:

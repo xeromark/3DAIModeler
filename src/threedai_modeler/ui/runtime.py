@@ -12,6 +12,7 @@ from ..core.paths import Workspace
 from ..core.presets import Presets
 from ..core.registry import ModelState, Registry
 from ..core.tasks import TaskRegistry
+from ..core.usage import Snapshot, find_nvidia_smi, snapshot
 
 POLL_SECONDS = 3.0
 DISK_EVERY = 20
@@ -34,6 +35,10 @@ class Runtime:
         self.last_error: str | None = None
         self.engine_disk_bytes: int | None = None
         self.parts_installed = False
+        self.usage: Snapshot | None = None
+        self.engine_ram: int | None = None
+        self.all_jobs: list[Job] = []
+        self._nvidia_smi = find_nvidia_smi()
         self.models_disk_bytes = 0
         self._polls = 0
         self.version = 0
@@ -67,7 +72,14 @@ class Runtime:
         try:
             state, message = self.manager.status()
             states = {m: self.registry.state(self.ws, m) for m in self.registry.models}
-            jobs = Job.list_all(self.ws)[-8:][::-1]
+            self.all_jobs = Job.list_all(self.ws)
+            jobs = self.all_jobs[-8:][::-1]
+            if state is EngineState.READY:
+                self.usage = snapshot(self.client, self._nvidia_smi)
+                self.engine_ram = self.manager.runner.engine_memory()
+                self.version += 1  # números en vivo
+            else:
+                self.usage, self.engine_ram = None, None
             installed = {
                 f.id: f.size
                 for m in self.registry.models

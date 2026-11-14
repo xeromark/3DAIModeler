@@ -37,9 +37,21 @@ El proyecto usa [SemVer](https://semver.org/lang/es/).
   en el addon, `--no-upright` en la CLI.
 - `bench`: genera un set de imágenes y escribe un informe en `docs/benchmarks/`.
 - `resume --from <etapa>`: repite una etapa y las siguientes sin regenerar el modelo.
+- Interfaz reorganizada: **Motor** (estado, VRAM/RAM en vivo, modelos en uso, gestionar
+  modelos), **Generar** (solo imagen, calidad, polígonos y opciones; avanzado aparte) y
+  **Resultados** (miniaturas, importar, reanudar, abrir carpeta, borrar). Textos largos en varias
+  líneas, tiempo estimado según trabajos anteriores.
+- Agregar modelo **desde archivo**: lee solo la cabecera del `.safetensors`, reconoce la
+  arquitectura y la precisión por su huella (`models/signatures.toml`) y, si el archivo es
+  idéntico a uno del catálogo, lo instala sin volver a descargarlo. Mover o copiar al proyecto.
+- Agregar desde Hugging Face lista los `.safetensors` del repositorio.
+- La energía de cada trabajo (Wh, medida con `nvidia-smi`) queda en sus métricas.
 
 ### Fixed
 
 - El addon detectaba el motor como "no instalado" con el motor detenido (el `python` del venv es
   un enlace que solo existe dentro del contenedor).
 - El motor no se detenía al cerrar Blender.
+- Blender abierto desde Steam no veía Docker (corre dentro del contenedor de Steam): usa
+  `/run/host/usr/bin/docker` y explica cómo exponer el socket.
+- Los trabajos creados antes de la etapa de partes aparecían como incompletos.

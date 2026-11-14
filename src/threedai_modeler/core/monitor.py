@@ -11,6 +11,8 @@ GiB = 1024**3
 
 VramFn = Callable[[], float | None]
 """Devuelve la VRAM usada en bytes, o None si no se puede medir."""
+PowerFn = Callable[[], float | None]
+"""Devuelve la potencia de la GPU en vatios, o None si no se puede medir."""
 
 
 def read_meminfo(path: Path = Path("/proc/meminfo")) -> dict[str, int]:
@@ -25,8 +27,18 @@ def read_meminfo(path: Path = Path("/proc/meminfo")) -> dict[str, int]:
 
 
 class ResourceMonitor:
-    def __init__(self, vram_used: VramFn | None = None, interval: float = 1.0) -> None:
+    def __init__(
+        self,
+        vram_used: VramFn | None = None,
+        interval: float = 1.0,
+        power_w: PowerFn | None = None,
+    ) -> None:
         self._vram_used = vram_used
+        self._power_w = power_w
+        self.energy_j = 0.0
+        self.peak_power_w = 0.0
+        self._last_power: tuple[float, float] | None = None  # (instante, vatios)
+        self._power_samples = 0
         self._interval = interval
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -46,6 +58,19 @@ class ResourceMonitor:
                 used = None
             if used is not None:
                 self.peak_vram = max(self.peak_vram, used)
+        if self._power_w is not None:
+            try:
+                watts = self._power_w()
+            except Exception:
+                watts = None
+            if watts is not None:
+                now = time.monotonic()
+                if self._last_power is not None:  # integración trapezoidal
+                    t0, w0 = self._last_power
+                    self.energy_j += (w0 + watts) / 2 * (now - t0)
+                self._last_power = (now, watts)
+                self.peak_power_w = max(self.peak_power_w, watts)
+                self._power_samples += 1
 
     def _loop(self) -> None:
         while not self._stop.wait(self._interval):
@@ -66,9 +91,13 @@ class ResourceMonitor:
     seconds = 0.0
 
     def as_dict(self) -> dict[str, float]:
-        return {
+        data = {
             "seconds": round(self.seconds, 1),
             "peak_ram_gib": round(self.peak_ram / GiB, 2),
             "peak_swap_gib": round(self.peak_swap / GiB, 2),
             "peak_vram_gib": round(self.peak_vram / GiB, 2),
         }
+        if self._power_samples >= 2:
+            data["energy_wh"] = round(self.energy_j / 3600, 2)
+            data["peak_power_w"] = round(self.peak_power_w, 1)
+        return data

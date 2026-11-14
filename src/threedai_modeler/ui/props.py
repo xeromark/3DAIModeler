@@ -5,8 +5,6 @@ from __future__ import annotations
 import bpy
 from bpy.props import BoolProperty, EnumProperty, IntProperty, PointerProperty, StringProperty
 
-from ..core.registry import ModelState
-from ..core.workflows import BUILDERS
 from . import runtime
 
 QUALITY_ITEMS = [
@@ -23,29 +21,9 @@ FACES_ITEMS = [
     ("custom", "Personalizada", "Número exacto de caras"),
 ]
 
-_model_items: list[tuple[str, str, str]] = []
-"""Blender exige mantener viva la lista de un EnumProperty dinámico."""
-
-
-def model_items(_self: object, _context: object) -> list[tuple[str, str, str]]:
-    global _model_items
-    try:
-        rt = runtime.get()
-        _model_items = []
-        for m in rt.registry.models.values():
-            if m.family not in BUILDERS:  # familias sin adaptador todavía
-                continue
-            installed = rt.model_states.get(m.id) is ModelState.INSTALLED
-            label = m.name if installed else f"{m.name} (sin descargar)"
-            _model_items.append((m.id, label, f"{m.family} · {m.precision} · {m.license}"))
-    except RuntimeError:
-        _model_items = []
-    return _model_items or [("", "Sin modelos", "")]
-
 
 class THREEDAI_Props(bpy.types.PropertyGroup):
     image: StringProperty(name="Imagen", subtype="FILE_PATH")
-    model_id: EnumProperty(name="Modelo", items=model_items)
     quality: EnumProperty(name="Calidad", items=QUALITY_ITEMS, default="standard")
     faces: EnumProperty(name="Polígonos", items=FACES_ITEMS, default="medium")
     faces_custom: IntProperty(name="Caras", default=30_000, min=100, max=5_000_000, step=1000)
@@ -63,6 +41,11 @@ class THREEDAI_Props(bpy.types.PropertyGroup):
     )
     object_name: StringProperty(
         name="Nombre", description="Nombre del objeto (vacío: el nombre de la imagen)"
+    )
+    show_unsupported: BoolProperty(
+        name="Mostrar modelos sin soporte",
+        description="Incluye modelos del catálogo que la app aún no puede usar",
+        default=False,
     )
 
     def target_faces(self) -> int:

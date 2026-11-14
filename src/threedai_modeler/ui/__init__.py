@@ -6,7 +6,7 @@ import atexit
 
 import bpy
 
-from . import ops, panels, prefs, props, runtime
+from . import ops, panels, prefs, previews, props, runtime
 
 CLASSES = (*prefs.CLASSES, *props.CLASSES, *ops.CLASSES, *panels.CLASSES)
 TICK_SECONDS = 0.5
@@ -73,6 +73,7 @@ def unregister() -> None:
     if bpy.app.timers.is_registered(_tick):
         bpy.app.timers.unregister(_tick)
     _stop_engine_if_configured(runtime.shutdown())
+    previews.clear()
     props.unregister()
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)

@@ -12,6 +12,7 @@ from threedai_modeler.core.engine import (
     EngineManager,
     EngineState,
     LogFn,
+    parse_size,
 )
 from threedai_modeler.core.paths import Workspace
 
@@ -63,6 +64,9 @@ class FakeRunner:
 
     def install_parts(self, log: LogFn, cancel: threading.Event | None = None) -> None:
         pass
+
+    def engine_memory(self) -> int | None:
+        return None
 
 
 class FakeClient(ComfyClient):
@@ -178,3 +182,9 @@ def test_install_checks_accept_container_only_symlinks(
     runner = DockerRunner(ws)
     assert runner.is_installed()
     assert runner.parts_installed()
+
+
+def test_parse_size() -> None:
+    assert parse_size("2.5GiB") == int(2.5 * 1024**3)
+    assert parse_size(" 512MiB ") == 512 * 1024**2
+    assert parse_size("raro") is None

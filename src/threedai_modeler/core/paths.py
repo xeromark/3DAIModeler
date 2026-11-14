@@ -58,6 +58,10 @@ class Workspace:
         return self.root / "models" / "registry.toml"
 
     @property
+    def signatures_file(self) -> Path:
+        return self.root / "models" / "signatures.toml"
+
+    @property
     def presets_file(self) -> Path:
         return self.root / "models" / "presets.toml"
 

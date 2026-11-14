@@ -22,6 +22,10 @@ class THREEDAI_Preferences(bpy.types.AddonPreferences):
         description="Si el motor está detenido, arrancarlo automáticamente al pulsar Generar",
         default=True,
     )
+    generation_model: StringProperty(
+        name="Modelo de generación",
+        description="ID del modelo que se usa para generar (vacío: el predeterminado)",
+    )
     stop_engine_on_exit: BoolProperty(
         name="Detener el motor al cerrar Blender",
         description="Libera la RAM y la VRAM que usa el motor",
@@ -43,3 +47,16 @@ def get(context: bpy.types.Context | None = None) -> THREEDAI_Preferences | None
 
 
 CLASSES = (THREEDAI_Preferences,)
+
+
+def generation_model_id(context: bpy.types.Context | None = None) -> str:
+    """Modelo de generación elegido, o el predeterminado del catálogo."""
+    from . import runtime
+
+    preferences = get(context)
+    chosen = preferences.generation_model if preferences else ""
+    registry = runtime.get().registry
+    if chosen in registry.models:
+        return chosen
+    default = registry.default_model()
+    return default.id if default else ""

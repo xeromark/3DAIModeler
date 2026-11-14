@@ -19,6 +19,7 @@ from .monitor import ResourceMonitor
 from .paths import Workspace
 from .presets import Presets
 from .registry import ModelState, Registry
+from .usage import find_nvidia_smi, read_gpu
 from .workflows import GenerationParams, build_workflow, output_files, set_input, stage_label
 
 ProgressFn = Callable[["Progress"], None]
@@ -75,6 +76,7 @@ class Pipeline:
         """Ejecutable de Blender para el postproceso (en el addon: bpy.app.binary_path)."""
         self.runner = runner
         """Para ejecutar herramientas dentro del motor (etapa parts)."""
+        self._nvidia_smi = find_nvidia_smi()
 
     def check_ready(self, job: Job) -> None:
         if job.stages["generate"].status is not StageStatus.DONE:
@@ -118,6 +120,10 @@ class Pipeline:
 
     # ------------------------------------------------------------ etapas
 
+    def _power_w(self) -> float | None:
+        reading = read_gpu(self._nvidia_smi)
+        return reading.power_w if reading else None
+
     def _vram_used(self) -> float | None:
         device = self.client.system_stats()["devices"][0]
         return float(device["vram_total"] - device["vram_free"])
@@ -159,7 +165,7 @@ class Pipeline:
                 report(current["label"], float(data["value"]) / float(data["max"]))
 
         try:
-            with ResourceMonitor(self._vram_used) as monitor:
+            with ResourceMonitor(self._vram_used, power_w=self._power_w) as monitor:
                 outputs = self.client.run(workflow, on_event, cancel)
                 timer.switch(None)
         finally:
@@ -224,20 +230,24 @@ class Pipeline:
         labels = job.dir / "parts" / "labels.npz"
         labels.parent.mkdir(parents=True, exist_ok=True)
         weights = self.registry.local_path(self.ws, self.registry.files_of(PARTS_MODEL)[0])
-        stdout = self.runner.run_tool(
-            [
-                "/workspace/parts/.venv/bin/python",
-                "/scripts/parts_segment.py",
-                self.runner.engine_path(glb),
-                self.runner.engine_path(labels),
-                "--ckpt",
-                self.runner.engine_path(weights),
-                "--seed",
-                str(job.seed),
-            ]
-        )
+        with ResourceMonitor(power_w=self._power_w) as monitor:
+            stdout = self.runner.run_tool(
+                [
+                    "/workspace/parts/.venv/bin/python",
+                    "/scripts/parts_segment.py",
+                    self.runner.engine_path(glb),
+                    self.runner.engine_path(labels),
+                    "--ckpt",
+                    self.runner.engine_path(weights),
+                    "--seed",
+                    str(job.seed),
+                ]
+            )
         line = next((ln for ln in stdout.splitlines() if ln.startswith("RESULT ")), None)
         if line is None or not labels.is_file():
             raise PipelineError("la segmentación en partes no devolvió resultado")
         record.outputs = {"labels": str(labels.relative_to(job.dir))}
+        energy = monitor.as_dict().get("energy_wh")
         record.metrics = json.loads(line.removeprefix("RESULT "))
+        if energy is not None:
+            record.metrics["energy_wh"] = energy

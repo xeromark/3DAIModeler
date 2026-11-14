@@ -1,0 +1,14 @@
+# Huellas de arquitectura para reconocer pesos agregados desde un archivo.
+# fingerprint = SHA-256 de las líneas "nombre:forma" ordenadas de los tensores, sin los tensores
+# de cuantización (core/safetensors_info.py). Igual para INT8, bf16 y fine-tunes.
+
+schema = 1
+
+[families.pixal3d]
+fingerprint = "0996d40a238d72b240b6de5a495431cc4cadd8f1365fdbda0d342117f66fda7b"
+tensors = 2800
+note = "Pixal3D y Pixal3D multivista comparten arquitectura"
+
+[families.trellis2]
+fingerprint = "b5252e6762929aec240cf2afd104f3153a52220af46488abeb3a21891558b75d"
+tensors = 2560

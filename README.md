@@ -70,6 +70,10 @@ imagen de Docker (~1 GB en `/var/lib/docker`).
 ./scripts/install-addon.sh uninstall
 ```
 
+**Blender de Steam:** Steam lo ejecuta dentro de su contenedor, que oculta Docker. Agrega en
+Steam → Blender → Propiedades → Opciones de lanzamiento:
+`PRESSURE_VESSEL_FILESYSTEMS_RW=/run/docker.sock %command%`
+
 En Blender: Viewport 3D → barra lateral (`N`) → pestaña **3DAI**. Desde ahí se instala, inicia y
 detiene el motor, se descargan modelos y se genera. El código no se copia fuera del proyecto: el
 addon se carga desde `src/` como repositorio local de extensiones.
