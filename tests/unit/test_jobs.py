@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -64,3 +65,16 @@ def test_reset_from_clears_later_stages(tmp_path: Path) -> None:
     assert loaded.stages["postprocess"].status is StageStatus.PENDING
     with pytest.raises(JobError):
         job.reset_from("nada")
+
+
+def test_old_job_without_parts_stage_is_still_done(tmp_path: Path) -> None:
+    ws, job = make_job(tmp_path)
+    raw = json.loads((job.dir / "job.json").read_text())
+    del raw["stages"]["parts"]
+    del raw["parts"]
+    for stage in raw["stages"].values():
+        stage["status"] = "done"
+    (job.dir / "job.json").write_text(json.dumps(raw))
+    loaded = Job.load(ws, job.id)
+    assert loaded.is_done
+    assert loaded.stages["parts"].metrics == {"skipped": True}

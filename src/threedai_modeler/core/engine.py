@@ -22,6 +22,11 @@ from .paths import Workspace
 LogFn = Callable[[str], None]
 IMAGE = "3daimodeler-engine:dev"
 NO_DOCKER = "Docker no está instalado. Instálalo junto con nvidia-container-toolkit."
+STEAM_NO_SOCKET = (
+    "Blender abierto desde Steam no puede usar Docker: el contenedor de Steam oculta su socket. "
+    "Agrega en Steam > Blender > Propiedades > Opciones de lanzamiento: "
+    "PRESSURE_VESSEL_FILESYSTEMS_RW=/run/docker.sock %command%  (o abre Blender fuera de Steam)."
+)
 SERVICE = "engine"
 
 
@@ -61,12 +66,30 @@ class Runner(Protocol):
     def install_parts(self, log: LogFn, cancel: threading.Event | None = None) -> None: ...
 
 
+HOST_DOCKER = "/run/host/usr/bin/docker"
+"""Dentro del contenedor de Steam (pressure-vessel) el /usr del sistema está en /run/host."""
+
+
+def in_steam_container() -> bool:
+    marker = os.environ.get("container")  # noqa: SIM112 (nombre real de la variable)
+    return marker == "pressure-vessel" or Path("/run/pressure-vessel").exists()
+
+
+def find_docker() -> str:
+    found = shutil.which("docker")
+    if found:
+        return found
+    if Path(HOST_DOCKER).exists():
+        return HOST_DOCKER
+    return "docker"
+
+
 class DockerRunner:
     """Motor en Docker Compose (compose.yaml del workspace)."""
 
-    def __init__(self, ws: Workspace, docker: str = "docker") -> None:
+    def __init__(self, ws: Workspace, docker: str | None = None) -> None:
         self.ws = ws
-        self.docker = docker
+        self.docker = docker or find_docker()
 
     # ------------------------------------------------------------ comandos
 
@@ -128,6 +151,8 @@ class DockerRunner:
         result = self._run([self.docker, "info", "--format", "{{.ServerVersion}}"], timeout=15)
         if result.returncode != 0:
             err = result.stderr.lower()
+            if in_steam_container() and ("no such file" in err or "cannot connect" in err):
+                raise EngineError(STEAM_NO_SOCKET)
             if "permission denied" in err:
                 raise EngineError(
                     "Tu usuario no puede usar Docker: agrégalo al grupo 'docker' y reinicia sesión."
@@ -203,12 +228,12 @@ class EngineManager:
 
     def status(self) -> tuple[EngineState, str]:
         """Estado actual y un mensaje para mostrar."""
+        if self.client.is_ready():  # por HTTP: funciona aunque no se pueda controlar Docker
+            return EngineState.READY, f"Listo en {self.client.base_url}"
         try:
             self.runner.check_available()
         except EngineError as err:
             return EngineState.UNAVAILABLE, str(err)
-        if self.client.is_ready():
-            return EngineState.READY, f"Listo en {self.client.base_url}"
         if self.runner.is_running():
             return EngineState.STARTING, "Arrancando..."
         if not self.runner.is_installed():

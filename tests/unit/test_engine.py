@@ -81,6 +81,11 @@ def test_status_unavailable() -> None:
     assert state is EngineState.UNAVAILABLE and "apagado" in msg
 
 
+def test_status_ready_by_http_even_without_docker() -> None:
+    state, _msg = EngineManager(FakeRunner(available=False), FakeClient(0)).status()
+    assert state is EngineState.READY
+
+
 def test_status_not_installed_stopped_starting_ready() -> None:
     assert EngineManager(FakeRunner(installed=False), FakeClient(-1)).status()[0] is (
         EngineState.NOT_INSTALLED
@@ -127,7 +132,7 @@ def test_docker_runner_commands(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         return subprocess.CompletedProcess(cmd, 0, "abc123\n", "")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    runner = DockerRunner(Workspace(tmp_path))
+    runner = DockerRunner(Workspace(tmp_path), docker="docker")
     assert runner.is_running()
     runner.start()
     runner.stop()

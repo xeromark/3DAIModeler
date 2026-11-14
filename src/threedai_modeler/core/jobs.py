@@ -130,7 +130,8 @@ class Job:
             for name, raw in data.pop("stages").items()
         }
         for name in STAGES:  # trabajos creados antes de agregar etapas nuevas
-            stages.setdefault(name, StageRecord())
+            if name not in stages:
+                stages[name] = _stage_for_old_job(name, data)
         return cls(**data, stages=stages, root=ws.jobs_dir)
 
     @classmethod
@@ -146,3 +147,14 @@ class Job:
         tmp = self.dir / "job.json.tmp"
         tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False))
         tmp.replace(self.dir / "job.json")
+
+
+def _stage_for_old_job(stage: str, data: dict[str, Any]) -> StageRecord:
+    """Etapa que no existía cuando se creó el trabajo.
+
+    Si el trabajo no la necesitaba (p. ej. 'parts' sin partes pedidas), queda hecha y saltada;
+    así un trabajo terminado no aparece como incompleto.
+    """
+    if stage == "parts" and not data.get("parts", False):
+        return StageRecord(status=StageStatus.DONE, metrics={"skipped": True})
+    return StageRecord()
