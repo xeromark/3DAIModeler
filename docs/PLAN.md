@@ -39,7 +39,7 @@ Prioridad: **calidad sobre velocidad**. Restricción: **funcionar optimizado con
 |---|---|
 | RF-01 | Generar un modelo 3D texturizado desde una imagen. |
 | RF-02 | Generar desde varias imágenes del mismo objeto (multivista). |
-| RF-03 | Generar desde texto, pasando por un modelo local de texto → imagen. |
+| ~~RF-03~~ | ~~Generar desde texto.~~ Fuera de alcance (D13): la imagen se prepara con herramientas externas. |
 | RF-04 | Separar el modelo en partes; cada parte es un objeto con nombre propio en Blender. |
 | RF-05 | Elegir la cantidad de polígonos por preset o valor manual (total o por parte). |
 | RF-06 | Conservar el detalle al reducir polígonos con bake de normal map y textura (alta → baja). |
@@ -376,7 +376,7 @@ hoja + cabeza) en ~45 s extra con 6.4 GiB de VRAM; probado desde la CLI y desde 
 - Varias semillas con previews y elección en el panel (RF-15).
 - Upscale de texturas a 4K.
 - Presets `draft` / `standard` / `max`, ajustados con el benchmark.
-- Texto → imagen local (RF-03); el modelo concreto se decide en un ADR.
+- ~~Texto → imagen local (RF-03)~~: descartado (D13).
 
 **Aceptación:** el preset `max` supera la línea base de M1 en el benchmark (comparación visual
 documentada).
@@ -403,6 +403,7 @@ documentada).
 | D9 | Postproceso en un Blender aparte (background) | La interfaz no se congela y los fallos quedan aislados. |
 | D10 | `core/` solo con stdlib | Corre dentro de Blender sin instalar dependencias. |
 | D11 | Todo dentro del workspace | Orden y espacio: `/` tiene poco disco libre. |
+| D13 | Sin edición de imagen ni texto → imagen dentro de la app | El usuario prepara o edita las imágenes con herramientas externas (Gemini, ChatGPT...); la app se enfoca en imagen → 3D. Evita ~12 GB y complejidad extra. |
 | D12 | P3-SAM como worker en venv aparte (no como nodo de ComfyUI) | Sus dependencias (spconv, numpy fijado) no se mezclan con las de ComfyUI; corre después de liberar la memoria de la generación. |
 
 ## 11. Riesgos
@@ -422,6 +423,6 @@ documentada).
 ## 12. Preguntas abiertas
 
 1. ¿Uso comercial a futuro (vender modelos o la herramienta)? Afecta las licencias.
-2. ¿Qué modelo de texto → imagen usar? Se decide en M6.
+2. ~~¿Qué modelo de texto → imagen usar?~~ Descartado (D13).
 3. ¿Fijar una versión de Blender o seguir la de Steam?
 4. ¿Arreglar la red bridge de Docker (requiere `sudo`) o mantener la red del host?
