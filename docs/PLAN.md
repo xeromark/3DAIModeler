@@ -289,15 +289,17 @@ Cada hito termina con algo usable, tests en verde y criterios de aceptación cum
 
 **Aceptación:** `ruff` y `pytest` pasan en limpio. `./scripts/engine.sh up` deja ComfyUI respondiendo.
 
-### M1 — Núcleo y generación desde CLI
+### M1 — Núcleo y generación desde CLI *(en curso)*
 
-- `core/paths.py`, `core/registry.py` (catálogo, descarga con SHA-256, revisión fijada, borrado seguro).
-- `models/registry.toml` con Pixal3D INT8 y archivos compartidos.
-- `core/comfy.py`: encolar un workflow, seguir el progreso, descargar los resultados y llamar a `/free`.
-- `core/jobs.py`: etapas, estado en disco y reanudación.
-- Workflow `pixal3d` imagen → GLB texturizado.
-- CLI: `generate`, `models list|download|remove`.
-- Primer benchmark: línea base de tiempo, RAM, VRAM y calidad.
+- [x] `core/paths.py`, `core/registry.py` (catálogo, descarga con SHA-256, revisión fijada, borrado seguro).
+- [x] `models/registry.toml` con Pixal3D INT8 y archivos compartidos.
+- [x] `core/comfy.py`: encolar un workflow, seguir el progreso (WebSocket), descargar los resultados y llamar a `/free`.
+- [x] `core/jobs.py`: etapas, estado en disco y reanudación.
+- [x] Workflow `pixal3d` imagen → GLB texturizado (basado en la plantilla oficial; incluye remesh,
+  decimate, UVs y bake de color/normal/AO).
+- [x] CLI: `generate`, `resume`, `jobs`, `preview`, `models list|download|remove`.
+- [x] Primera línea base con una imagen (`docs/benchmarks/2026-11-14-baseline.md`).
+- [ ] Set de benchmark con ~10 imágenes propias en `tests/fixtures/bench/`.
 
 **Aceptación:** `python -m threedai_modeler.cli generate foto.png` produce un GLB texturizado.
 El pico de RAM cumple RNF-01 y queda medido.

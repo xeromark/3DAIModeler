@@ -1,0 +1,48 @@
+# Presets de calidad y de polígonos.
+# Los valores de "standard" son los de la plantilla oficial de ComfyUI para Pixal3D.
+# Se ajustan con el benchmark (tests/fixtures/bench, docs/benchmarks).
+
+schema = 1
+
+[quality.draft]
+description = "Rápido, para probar la imagen"
+structure_steps = 8
+shape_steps = 12
+upsample_steps = 8
+texture_steps = 8
+upsample_resolution = 1024
+remesh_resolution = 512
+texture_size = 2048
+normal_size = 1024
+ao_size = 512
+
+[quality.standard]
+description = "Valores de la plantilla oficial"
+structure_steps = 12
+shape_steps = 20
+upsample_steps = 12
+texture_steps = 12
+upsample_resolution = 1536
+remesh_resolution = 768
+texture_size = 4096
+normal_size = 2048
+ao_size = 1024
+
+[quality.max]
+description = "Máxima calidad, sin importar el tiempo"
+structure_steps = 20
+shape_steps = 30
+upsample_steps = 20
+texture_steps = 20
+upsample_resolution = 2048
+remesh_resolution = 1024
+texture_size = 4096
+normal_size = 4096
+ao_size = 2048
+
+# Caras (triángulos) del modelo final.
+[polycount]
+low = 10_000
+medium = 50_000
+high = 200_000
+ultra = 700_000

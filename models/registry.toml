@@ -1,0 +1,158 @@
+# Catálogo oficial de modelos.
+#
+# [files.<id>]  Un archivo descargable. Varios modelos pueden compartirlo
+#               (se borra solo cuando ningún modelo instalado lo usa).
+#   repo/revision/path  Origen en Hugging Face; revision = commit fijado.
+#   dest                Carpeta dentro de engine/ComfyUI/models/.
+#   size/sha256         Se verifican al descargar.
+#
+# [[models]]    Lo que el usuario ve y elige en el addon.
+#   family              Qué adaptador/workflow lo usa (core/workflows/).
+#   roles               Etapas que cubre: shape, texture, parts.
+#   files               IDs de [files.*] necesarios.
+
+schema = 1
+
+# --- Compartidos por la familia pixal3d / trellis2 ---------------------------
+
+[files.trellis2-shape-vae]
+repo = "Comfy-Org/Pixal3D"
+revision = "f37641be376725d324c56626007cc477f1249a69"
+path = "vae/trellis_2_shape_vae_bf16.safetensors"
+dest = "vae"
+size = 1095844024
+sha256 = "de0cb4949a76c59ee5c091a995a69bcc8c51d5aeda939f0c641a50d2a72341f4"
+
+[files.trellis2-texture-vae]
+repo = "Comfy-Org/Pixal3D"
+revision = "f37641be376725d324c56626007cc477f1249a69"
+path = "vae/trellis_2_texture_vae_bf16.safetensors"
+dest = "vae"
+size = 948461364
+sha256 = "714e5ebf094a610e12a8e3b5175c18a62f37f6ea4218acb6073644456b73ab0e"
+
+[files.dino-v3-l-naf]
+repo = "Comfy-Org/Pixal3D"
+revision = "f37641be376725d324c56626007cc477f1249a69"
+path = "clip_vision/dino_v3_L_naf_fp32.safetensors"
+dest = "clip_vision"
+size = 1215214176
+sha256 = "4ad2ec4e0879a5b5b04cd97325cc37da954a7b6edca5170b86510f17f2b2290f"
+
+[files.moge2-vitl]
+repo = "Comfy-Org/MoGe"
+revision = "1484985258ba7ef45c314144fcf0e90924ffbf44"
+path = "geometry_estimation/moge_2_vitl_normal_fp16.safetensors"
+dest = "geometry_estimation"
+size = 661859924
+sha256 = "cb1a692d03235671e959e81360d7b4d9f44aefadb1f852d6ca6aa17799d5e31f"
+
+[files.birefnet]
+repo = "Comfy-Org/BiRefNet"
+revision = "884af709e9b795d89dafbf97f29c8d6a2386f5c6"
+path = "background_removal/birefnet.safetensors"
+dest = "background_removal"
+size = 444473596
+sha256 = "9ab37426bf4de0567af6b5d21b16151357149139362e6e8992021b8ce356a154"
+
+# --- Pixal3D -----------------------------------------------------------------
+
+[files.pixal3d-int8]
+repo = "Comfy-Org/Pixal3D"
+revision = "f37641be376725d324c56626007cc477f1249a69"
+path = "diffusion_models/pixal3d_int8_convrot.safetensors"
+dest = "diffusion_models"
+size = 5584555824
+sha256 = "4621eac3b715484f79303c7152af641fe0b2b14f4d0e3d394fd6922d00f955ec"
+
+[files.pixal3d-multiview-int8]
+repo = "Comfy-Org/Pixal3D"
+revision = "f37641be376725d324c56626007cc477f1249a69"
+path = "diffusion_models/pixal3d_multiview_int8_convrot.safetensors"
+dest = "diffusion_models"
+size = 5584555824
+sha256 = "6b1eb3328930d921d3b57508d9c46cceec1c174dcedeebc14f176ab67d49f477"
+
+[files.pixal3d-bf16]
+repo = "Comfy-Org/Pixal3D"
+revision = "f37641be376725d324c56626007cc477f1249a69"
+path = "diffusion_models/pixal3d_bf16.safetensors"
+dest = "diffusion_models"
+size = 10999317704
+sha256 = "5f3cd67b7ff9104d810754bcd89e47a6c2393e41f8c0a808d0dead37802d85fe"
+
+# --- TRELLIS.2 ---------------------------------------------------------------
+
+[files.trellis2-int8]
+repo = "Comfy-Org/TRELLIS.2"
+revision = "430a9d09b2416687018c8fe8edced2ad4858a439"
+path = "diffusion_models/trellis_2_int8_convrot.safetensors"
+dest = "diffusion_models"
+size = 5253048192
+sha256 = "d01952ad137213f6a868f86b6b877026276f84af5eec23069217475a0bad3a31"
+
+# --- Modelos -----------------------------------------------------------------
+
+[[models]]
+id = "pixal3d-int8"
+name = "Pixal3D (INT8)"
+family = "pixal3d"
+roles = ["shape", "texture"]
+precision = "int8"
+license = "MIT"
+default = true
+files = [
+    "pixal3d-int8",
+    "dino-v3-l-naf",
+    "trellis2-shape-vae",
+    "trellis2-texture-vae",
+    "moge2-vitl",
+    "birefnet",
+]
+
+[[models]]
+id = "pixal3d-multiview-int8"
+name = "Pixal3D multivista (INT8)"
+family = "pixal3d-multiview"
+roles = ["shape", "texture"]
+precision = "int8"
+license = "MIT"
+files = [
+    "pixal3d-multiview-int8",
+    "dino-v3-l-naf",
+    "trellis2-shape-vae",
+    "trellis2-texture-vae",
+    "moge2-vitl",
+    "birefnet",
+]
+
+[[models]]
+id = "pixal3d-bf16"
+name = "Pixal3D (bf16, requiere más RAM)"
+family = "pixal3d"
+roles = ["shape", "texture"]
+precision = "bf16"
+license = "MIT"
+files = [
+    "pixal3d-bf16",
+    "dino-v3-l-naf",
+    "trellis2-shape-vae",
+    "trellis2-texture-vae",
+    "moge2-vitl",
+    "birefnet",
+]
+
+[[models]]
+id = "trellis2-int8"
+name = "TRELLIS.2 (INT8)"
+family = "trellis2"
+roles = ["shape", "texture"]
+precision = "int8"
+license = "MIT"
+files = [
+    "trellis2-int8",
+    "dino-v3-l-naf",
+    "trellis2-shape-vae",
+    "trellis2-texture-vae",
+    "birefnet",
+]

@@ -1,0 +1,50 @@
+from pathlib import Path
+
+import pytest
+
+from threedai_modeler.core.jobs import STAGES, Job, JobError, StageStatus
+from threedai_modeler.core.paths import Workspace
+
+
+def make_job(tmp_path: Path) -> tuple[Workspace, Job]:
+    ws = Workspace(tmp_path)
+    image = tmp_path / "foto.PNG"
+    image.write_bytes(b"png")
+    job = Job.create(ws, image, model_id="m", quality="draft", target_faces=1000, seed=3)
+    return ws, job
+
+
+def test_create_copies_input_and_saves(tmp_path: Path) -> None:
+    ws, job = make_job(tmp_path)
+    assert job.input_path.read_bytes() == b"png"
+    assert job.input_path.name == "input.png"
+    assert set(job.stages) == set(STAGES)
+    assert (ws.jobs_dir / job.id / "job.json").is_file()
+
+
+def test_roundtrip_keeps_stage_state(tmp_path: Path) -> None:
+    ws, job = make_job(tmp_path)
+    rec = job.stages["generate"]
+    rec.status = StageStatus.DONE
+    rec.outputs["glb"] = "generate/model.glb"
+    rec.metrics["seconds"] = 12.5
+    job.save()
+
+    loaded = Job.load(ws, job.id)
+    assert loaded.stages["generate"].status is StageStatus.DONE
+    assert loaded.output_path("generate", "glb") == job.dir / "generate" / "model.glb"
+    assert loaded.stages["generate"].metrics == {"seconds": 12.5}
+    assert loaded.is_done
+
+
+def test_list_and_missing(tmp_path: Path) -> None:
+    ws, job = make_job(tmp_path)
+    assert [j.id for j in Job.list_all(ws)] == [job.id]
+    with pytest.raises(JobError):
+        Job.load(ws, "no-existe")
+
+
+def test_missing_image(tmp_path: Path) -> None:
+    ws = Workspace(tmp_path)
+    with pytest.raises(JobError):
+        Job.create(ws, tmp_path / "x.png", model_id="m", quality="q", target_faces=1, seed=1)

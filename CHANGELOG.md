@@ -14,3 +14,9 @@ El proyecto usa [SemVer](https://semver.org/lang/es/).
 - Lockfile de dependencias del motor.
 - CI con lint, tipos y tests unitarios.
 - Plan de desarrollo en `docs/PLAN.md`.
+- Registro de modelos (`models/registry.toml`) con descarga reanudable y verificación SHA-256.
+- Cliente de ComfyUI con progreso por WebSocket (solo biblioteca estándar).
+- Workflow Pixal3D imagen → GLB con texturas PBR, presets de calidad y de polígonos.
+- Trabajos por etapas guardados en disco y reanudables; métricas de tiempo, RAM y VRAM.
+- CLI: `generate`, `resume`, `jobs`, `preview`, `models list|download|remove`.
+- Render de vistas previas con Blender en background (`worker/render_preview.py`).
