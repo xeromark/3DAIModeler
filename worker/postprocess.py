@@ -23,7 +23,7 @@ import numpy as np
 from mathutils import Matrix, Vector
 from mathutils.kdtree import KDTree
 
-from projection import project_image
+from projection import load_cameras, project_views
 
 FACE_TOLERANCE = 0.05
 UPRIGHT_MAX_TILT = 40.0
@@ -44,8 +44,7 @@ def parse_args() -> argparse.Namespace:
         "--no-upright", dest="upright", action="store_false", help="no enderezar el modelo"
     )
     parser.add_argument("--export", default="", help="formatos extra separados por coma: fbx,obj")
-    parser.add_argument("--project", type=Path, help="imagen recortada para proyectar (con alfa)")
-    parser.add_argument("--project-fov", type=float, default=0.0, help="FOV horizontal (grados)")
+    parser.add_argument("--project", type=Path, help="projection.json con las cámaras a proyectar")
     return parser.parse_args(argv)
 
 
@@ -302,9 +301,9 @@ def main() -> None:
     flatten_hierarchy(objects)
     apply_transforms(objects)
     projection: dict = {"applied": False}
-    if args.project is not None and args.project_fov > 0 and len(objects) == 1:
+    if args.project is not None and len(objects) == 1:
         # Antes de enderezar o mover: la cámara de Pixal3D está en las coordenadas originales.
-        projection = project_image(objects[0], args.project, args.project_fov)
+        projection = project_views(objects[0], load_cameras(args.project))
     if args.parts is not None and len(objects) == 1:
         objects = split_parts(objects[0], args.parts)
     upright = auto_upright(objects) if args.upright else {"applied": False}

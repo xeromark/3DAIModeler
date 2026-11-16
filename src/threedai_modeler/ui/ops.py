@@ -11,7 +11,7 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, StringProperty
 
 from ..core.engine import EngineState
-from ..core.jobs import Job
+from ..core.jobs import Job, JobError, check_job_id
 from ..core.local_models import ImportMode, import_local
 from ..core.pipeline import PARTS_MODEL, Pipeline, Progress
 from ..core.presets import PresetError, custom_quality, quality_values
@@ -639,6 +639,11 @@ class THREEDAI_OT_job_delete(bpy.types.Operator):
         gen = rt.tasks.get("generate")
         if gen is not None and gen.running:
             self.report({"WARNING"}, "Hay una generación en curso")
+            return {"CANCELLED"}
+        try:
+            check_job_id(self.job_id)
+        except JobError as err:
+            self.report({"ERROR"}, str(err))
             return {"CANCELLED"}
         folder = (rt.ws.jobs_dir / self.job_id).resolve()
         if folder.parent != rt.ws.jobs_dir.resolve() or not (folder / "job.json").is_file():

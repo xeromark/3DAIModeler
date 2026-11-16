@@ -78,6 +78,12 @@ En Blender: Viewport 3D → barra lateral (`N`) → pestaña **3DAI**. Desde ah�
 detiene el motor, se descargan modelos y se genera. El código no se copia fuera del proyecto: el
 addon se carga desde `src/` como repositorio local de extensiones.
 
+## Documentación
+
+- [Guía de uso](docs/GUIA.md)
+- [Seguridad](docs/SEGURIDAD.md)
+- [Plan de desarrollo](docs/PLAN.md)
+
 ## Desarrollo
 
 ```bash

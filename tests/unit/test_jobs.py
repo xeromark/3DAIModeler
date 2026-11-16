@@ -121,3 +121,9 @@ def test_create_copies_extra_views(tmp_path: Path) -> None:
             seed=1,
             views={"back": tmp_path / "no.png"},
         )
+
+
+@pytest.mark.parametrize("bad", ["../etc", "x", "20261114-135023-3979/..", "20261114-135023-ZZZZ"])
+def test_rejects_invalid_job_ids(tmp_path: Path, bad: str) -> None:
+    with pytest.raises(JobError, match="inválido"):
+        Job.load(Workspace(tmp_path), bad)

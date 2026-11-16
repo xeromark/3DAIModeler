@@ -121,8 +121,15 @@ def build_multiview(template: Workflow, registry: Registry, p: GenerationParams)
         if view in images:
             set_input(wf, f"load_image_{view}", "image", images[view])
         else:  # vista no entregada: fuera del grafo
-            for node in (f"load_image_{view}", f"bg_remove_{view}", f"crop_{view}"):
-                del wf[node]
+            for node in (
+                f"load_image_{view}",
+                f"bg_remove_{view}",
+                f"crop_{view}",
+                f"mask_image_{view}",
+                f"crop_mask_{view}",
+                f"save_projection_{view}",
+            ):
+                wf.pop(node, None)
             del wf["conditioning"]["inputs"][view]
     _apply_common(wf, registry, p)
     return wf

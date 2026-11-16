@@ -122,6 +122,10 @@ def test_multiview_keeps_only_given_views(registry: Registry, presets: Presets) 
     assert wf["load_image_front"]["inputs"]["image"] == "f.png"
     assert wf["load_image_back"]["inputs"]["image"] == "b.png"
     assert "load_image_left" not in wf and "crop_right" not in wf
+    assert {n for n in wf if n.startswith("save_projection")} == {
+        "save_projection_front",
+        "save_projection_back",
+    }
     for node in wf.values():
         for value in node["inputs"].values():
             if isinstance(value, list):
@@ -173,3 +177,15 @@ def test_custom_quality_roundtrip(presets: Presets) -> None:
         custom_quality({**values, "normal_size": 16384})
     with pytest.raises(PresetError, match="remesh"):
         custom_quality({**values, "remesh_resolution": 64})
+
+
+def test_projection_cameras() -> None:
+    import math
+
+    from threedai_modeler.core.pipeline import projection_camera
+
+    single = projection_camera("front", "p.png", 47.5, multiview=False)
+    assert math.isclose(single["distance"], 0.5 / math.tan(math.radians(47.5) / 2))
+    back = projection_camera("back", "b.png", 20.0, multiview=True)
+    assert back["azimuth"] == 180.0
+    assert math.isclose(back["distance"], 1.1 * 0.5 / math.tan(math.radians(20.0) / 2))

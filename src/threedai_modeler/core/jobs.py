@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import secrets
 import shutil
 import time
@@ -19,6 +20,16 @@ STAGES: tuple[str, ...] = ("generate", "parts", "postprocess")
 
 class JobError(RuntimeError):
     """Trabajo inexistente o inválido."""
+
+
+JOB_ID = re.compile(r"\d{8}-\d{6}-[0-9a-f]{4}")
+"""Formato de los IDs (fecha-hora-aleatorio). Se valida para que un ID nunca salga de jobs/."""
+
+
+def check_job_id(job_id: str) -> str:
+    if not JOB_ID.fullmatch(job_id):
+        raise JobError(f"ID de trabajo inválido: {job_id!r}")
+    return job_id
 
 
 class StageStatus(StrEnum):
@@ -143,7 +154,7 @@ class Job:
 
     @classmethod
     def load(cls, ws: Workspace, job_id: str) -> Job:
-        path = ws.jobs_dir / job_id / "job.json"
+        path = ws.jobs_dir / check_job_id(job_id) / "job.json"
         if not path.is_file():
             raise JobError(f"no existe el trabajo {job_id}")
         data = json.loads(path.read_text())
@@ -160,7 +171,9 @@ class Job:
     def list_all(cls, ws: Workspace) -> list[Job]:
         if not ws.jobs_dir.is_dir():
             return []
-        ids = sorted(p.parent.name for p in ws.jobs_dir.glob("*/job.json"))
+        ids = sorted(
+            p.parent.name for p in ws.jobs_dir.glob("*/job.json") if JOB_ID.fullmatch(p.parent.name)
+        )
         return [cls.load(ws, i) for i in ids]
 
     def save(self) -> None:

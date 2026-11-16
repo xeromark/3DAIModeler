@@ -64,13 +64,22 @@ El proyecto usa [SemVer](https://semver.org/lang/es/).
   donde la superficie es visible y mira a la cámara, con transición suave hacia la textura
   generada. Cara, tatuajes, emblemas y ornamentos quedan con la nitidez de la imagen. Se cancela
   sola si la cámara no coincide con el modelo. Opción "Proyectar imagen" (activa por defecto),
-  CLI `--no-project`.
+  CLI `--no-project`. Con **multivista**, cada vista se proyecta desde su propia cámara (frente,
+  izquierda, espalda, derecha) y los pesos se reparten donde dos vistas ven lo mismo: cada render
+  queda 2-3 veces más cerca de su imagen original.
 - Panel **Estilos** (visualización en Blender, reversible): Anime / Cel shading (bandas de
   sombra y contorno por casco invertido), Blanco y negro, Colores saturados y Acuarela
   (compositor con filtro Kuwahara). Intensidad ajustable; se ve en el viewport y en el render, y
   los modelos importados después toman el estilo activo.
 - Polígonos "Sin reducir": conserva la malla completa del remesh (680 k a 1.6 M caras según
   la calidad), para impresión 3D o esculpir. CLI: `--faces none`.
+
+### Security
+
+- Revisión de seguridad documentada en `docs/SEGURIDAD.md`.
+- IDs de trabajo validados (`AAAAMMDD-HHMMSS-xxxx`): un ID manipulado no puede salir de
+  `engine/jobs/`.
+- Dependencias del entorno de partes fijadas (`scripts/container/parts-requirements.lock`).
 
 ### Fixed
 

@@ -24,6 +24,12 @@ git -C Hunyuan3D-Part checkout -q FETCH_HEAD
 echo ">> Python $PY_VERSION (venv en $PARTS/.venv)"
 [ -x .venv/bin/python ] || uv venv -q --python "$PY_VERSION" .venv
 
+LOCK=/scripts/parts-requirements.lock
+if [ -f "$LOCK" ] && [ "${NO_LOCK:-0}" != 1 ]; then
+    echo ">> Dependencias fijadas ($LOCK)"
+    uv pip sync --python .venv/bin/python "$LOCK" \
+        --extra-index-url "$TORCH_INDEX" --index-strategy unsafe-best-match
+else
 echo ">> PyTorch (misma versión que el motor)"
 TORCH_VERSION="$(/workspace/.venv/bin/python -c 'import torch; print(torch.__version__.split("+")[0])')"
 uv pip install --python .venv/bin/python "torch==$TORCH_VERSION" --index-url "$TORCH_INDEX"
@@ -34,6 +40,10 @@ echo ">> Dependencias de P3-SAM"
 uv pip install --python .venv/bin/python \
     "spconv-cu126==2.3.8" timm addict huggingface_hub packaging safetensors \
     trimesh fpsample numba scikit-learn tqdm omegaconf "numpy<2.3"
+
+# Para actualizar: NO_LOCK=1 y luego
+#   uv pip freeze --python .venv/bin/python > /scripts/parts-requirements.lock
+fi
 
 echo ">> Verificación"
 .venv/bin/python - <<'EOF'

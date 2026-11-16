@@ -638,5 +638,173 @@
         0
       ]
     }
+  },
+  "mask_image_front": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "bg_remove_front",
+        0
+      ]
+    }
+  },
+  "crop_mask_front": {
+    "class_type": "ImageCropToMask",
+    "inputs": {
+      "images": [
+        "mask_image_front",
+        0
+      ],
+      "masks": [
+        "bg_remove_front",
+        0
+      ],
+      "width": 1024,
+      "height": 1024,
+      "pad_factor": 1.1,
+      "grow_mask": 0,
+      "background": "#000000"
+    }
+  },
+  "save_projection_front": {
+    "class_type": "ThreeDAISaveProjection",
+    "inputs": {
+      "image": [
+        "crop_front",
+        0
+      ],
+      "mask": [
+        "crop_mask_front",
+        0
+      ],
+      "fov": 20.0,
+      "filename_prefix": "threedai/proj_front"
+    }
+  },
+  "mask_image_left": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "bg_remove_left",
+        0
+      ]
+    }
+  },
+  "crop_mask_left": {
+    "class_type": "ImageCropToMask",
+    "inputs": {
+      "images": [
+        "mask_image_left",
+        0
+      ],
+      "masks": [
+        "bg_remove_left",
+        0
+      ],
+      "width": 1024,
+      "height": 1024,
+      "pad_factor": 1.1,
+      "grow_mask": 0,
+      "background": "#000000"
+    }
+  },
+  "save_projection_left": {
+    "class_type": "ThreeDAISaveProjection",
+    "inputs": {
+      "image": [
+        "crop_left",
+        0
+      ],
+      "mask": [
+        "crop_mask_left",
+        0
+      ],
+      "fov": 20.0,
+      "filename_prefix": "threedai/proj_left"
+    }
+  },
+  "mask_image_back": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "bg_remove_back",
+        0
+      ]
+    }
+  },
+  "crop_mask_back": {
+    "class_type": "ImageCropToMask",
+    "inputs": {
+      "images": [
+        "mask_image_back",
+        0
+      ],
+      "masks": [
+        "bg_remove_back",
+        0
+      ],
+      "width": 1024,
+      "height": 1024,
+      "pad_factor": 1.1,
+      "grow_mask": 0,
+      "background": "#000000"
+    }
+  },
+  "save_projection_back": {
+    "class_type": "ThreeDAISaveProjection",
+    "inputs": {
+      "image": [
+        "crop_back",
+        0
+      ],
+      "mask": [
+        "crop_mask_back",
+        0
+      ],
+      "fov": 20.0,
+      "filename_prefix": "threedai/proj_back"
+    }
+  },
+  "mask_image_right": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "bg_remove_right",
+        0
+      ]
+    }
+  },
+  "crop_mask_right": {
+    "class_type": "ImageCropToMask",
+    "inputs": {
+      "images": [
+        "mask_image_right",
+        0
+      ],
+      "masks": [
+        "bg_remove_right",
+        0
+      ],
+      "width": 1024,
+      "height": 1024,
+      "pad_factor": 1.1,
+      "grow_mask": 0,
+      "background": "#000000"
+    }
+  },
+  "save_projection_right": {
+    "class_type": "ThreeDAISaveProjection",
+    "inputs": {
+      "image": [
+        "crop_right",
+        0
+      ],
+      "mask": [
+        "crop_mask_right",
+        0
+      ],
+      "fov": 20.0,
+      "filename_prefix": "threedai/proj_right"
+    }
   }
 }

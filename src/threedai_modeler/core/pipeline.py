@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import threading
 import time
 import traceback
@@ -24,6 +25,24 @@ from .workflows import GenerationParams, build_workflow, output_files, set_input
 
 ProgressFn = Callable[["Progress"], None]
 PARTS_MODEL = "p3sam"
+
+VIEW_AZIMUTH = {"front": 0.0, "left": 90.0, "back": 180.0, "right": 270.0}
+MULTIVIEW_PAD = 1.1
+"""En multivista el objeto ocupa 1/1.1 del cuadro (nodes_trellis2._VIEW_PAD)."""
+
+
+def projection_camera(view: str, image: str, fov: float, *, multiview: bool) -> dict[str, object]:
+    """Cámara de Pixal3D para proyectar `image` (ver worker/projection.py)."""
+    distance = 0.5 / math.tan(math.radians(fov) / 2.0)
+    if multiview:
+        distance *= MULTIVIEW_PAD
+    return {
+        "view": view,
+        "image": image,
+        "fov": fov,
+        "distance": distance,
+        "azimuth": VIEW_AZIMUTH[view],
+    }
 
 
 class PipelineError(RuntimeError):
@@ -161,8 +180,9 @@ class Pipeline:
         )
         workflow = build_workflow(self.ws.workflows_dir, self.registry, params)
         set_input(workflow, "save", "filename_prefix", f"threedai/{job.id}")
-        if "save_projection" in workflow:
-            set_input(workflow, "save_projection", "filename_prefix", f"threedai/{job.id}_proj")
+        for node_id in [n for n in workflow if n.startswith("save_projection")]:
+            view = node_id.removeprefix("save_projection").lstrip("_") or "front"
+            set_input(workflow, node_id, "filename_prefix", f"threedai/{job.id}_proj_{view}")
 
         timer = _Timer()
         current: dict[str, str] = {"label": ""}
@@ -194,12 +214,36 @@ class Pipeline:
         self.client.download(files[0], dest)
         record.outputs = {"glb": str(dest.relative_to(job.dir))}
         record.metrics = {**monitor.as_dict(), "stage_seconds": timer.rounded()}
-        projection = outputs.get("save_projection", {})
-        if projection.get("images") and projection.get("fov"):
-            proj = job.dir / "generate" / "projection.png"
-            self.client.download(projection["images"][0], proj)
-            record.outputs["projection"] = str(proj.relative_to(job.dir))
-            record.metrics["projection_fov"] = float(projection["fov"][0])
+        cameras = []
+        for node_id, out in outputs.items():
+            if not node_id.startswith("save_projection") or not out.get("images"):
+                continue
+            view = node_id.removeprefix("save_projection").lstrip("_") or "front"
+            proj_image = job.dir / "generate" / f"projection_{view}.png"
+            self.client.download(out["images"][0], proj_image)
+            fov = float(out["fov"][0])
+            camera = projection_camera(view, proj_image.name, fov, multiview=bool(job.views))
+            cameras.append(camera)
+        if cameras:
+            spec = job.dir / "generate" / "projection.json"
+            spec.write_text(json.dumps({"cameras": cameras}, indent=2))
+            record.outputs["projection"] = str(spec.relative_to(job.dir))
+
+    @staticmethod
+    def _projection_spec(job: Job) -> Path | None:
+        """projection.json del trabajo (los trabajos anteriores guardaban una sola imagen)."""
+        path = job.output_path("generate", "projection")
+        if path is None or not path.is_file():
+            return None
+        if path.suffix == ".json":
+            return path
+        fov = job.stages["generate"].metrics.get("projection_fov")
+        if not fov:
+            return None
+        spec = path.with_name("projection.json")
+        camera = projection_camera("front", path.name, float(fov), multiview=False)
+        spec.write_text(json.dumps({"cameras": [camera]}, indent=2))
+        return spec
 
     def _postprocess(
         self,
@@ -221,10 +265,9 @@ class Pipeline:
             args += ["--parts", str(labels)]
         if not job.upright:
             args.append("--no-upright")
-        projection = job.output_path("generate", "projection")
-        fov = job.stages["generate"].metrics.get("projection_fov")
-        if job.project_texture and projection is not None and projection.is_file() and fov:
-            args += ["--project", str(projection), "--project-fov", str(fov)]
+        spec = self._projection_spec(job)
+        if job.project_texture and spec is not None:
+            args += ["--project", str(spec)]
         if job.exports:
             args += ["--export", ",".join(job.exports)]
         started = time.monotonic()
