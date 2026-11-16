@@ -383,6 +383,7 @@ class THREEDAI_OT_generate(bpy.types.Operator):
             seed=random.randrange(2**31) if props.random_seed else props.seed,
             name=props.object_name.strip() or None,
             parts=props.split_parts,
+            parts_detail=props.parts_detail,
             upright=props.upright,
             views=views,
             custom_quality=props.custom_quality() if props.quality == "custom" else None,

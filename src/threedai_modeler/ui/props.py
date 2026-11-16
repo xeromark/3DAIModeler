@@ -59,6 +59,14 @@ class THREEDAI_Props(bpy.types.PropertyGroup):
         description="Divide el modelo en partes (P3-SAM); cada parte es un objeto",
         default=False,
     )
+    parts_detail: EnumProperty(
+        name="Detalle de partes",
+        items=[
+            ("normal", "Normal", "Una pasada de P3-SAM"),
+            ("detailed", "Detallado", "Vuelve a segmentar las piezas grandes (+10-15 s)"),
+        ],
+        default="detailed",
+    )
     project_texture: BoolProperty(
         name="Proyectar imagen",
         description=(

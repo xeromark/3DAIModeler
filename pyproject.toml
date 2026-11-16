@@ -1,6 +1,6 @@
 [project]
 name = "threedai-modeler"
-version = "0.1.0"
+version = "1.0.0"
 description = "Blender extension for local AI image-to-3D generation"
 readme = "README.md"
 # Igual que el Python que trae Blender 5.x.

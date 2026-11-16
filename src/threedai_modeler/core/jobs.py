@@ -64,6 +64,8 @@ class Job:
     """Nombre del objeto en Blender (por defecto, el nombre de la imagen)."""
     parts: bool = False
     """Separar el modelo en partes (P3-SAM)."""
+    parts_detail: str = "detailed"
+    """normal | detailed (re-segmenta las piezas grandes para separar subpiezas)."""
     upright: bool = True
     """Enderezar el modelo si sale inclinado (ver worker/postprocess.py)."""
     views: dict[str, str] = field(default_factory=dict)
@@ -114,6 +116,7 @@ class Job:
         seed: int,
         name: str | None = None,
         parts: bool = False,
+        parts_detail: str = "detailed",
         upright: bool = True,
         views: dict[str, Path] | None = None,
         custom_quality: dict[str, int] | None = None,
@@ -138,6 +141,7 @@ class Job:
             stages={stage: StageRecord() for stage in STAGES},
             name=name or image.stem,
             parts=parts,
+            parts_detail=parts_detail,
             upright=upright,
             views={v: f"view_{v}{p.suffix.lower()}" for v, p in views.items()},
             custom_quality=dict(custom_quality or {}),

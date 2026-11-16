@@ -5,6 +5,8 @@ El proyecto usa [SemVer](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-16
+
 ### Added
 
 - Motor en Docker: ComfyUI 0.45.3, PyTorch 2.14.1 + CUDA 13.0, modo `--offline`, solo `127.0.0.1`.
@@ -32,6 +34,10 @@ El proyecto usa [SemVer](https://semver.org/lang/es/).
 - Separación en partes con P3-SAM (Hunyuan3D-Part): etapa `parts` opcional, entorno aislado
   (`./scripts/engine.sh setup-parts`), un objeto por parte en Blender; opción en el addon y en
   la CLI (`generate --parts`).
+- **Detalle de partes "Detallado"** (predeterminado): las piezas con más del 30 % de las caras se
+  vuelven a segmentar solas; separa, por ejemplo, la hoja de la cabeza del hacha o el cinturón
+  del chaleco. Los parámetros internos de P3-SAM están fijados en su código, por eso se refina
+  por piezas en vez de ajustarlos.
 - Vistas previas con partes coloreadas (`render_preview.py ... --color-parts`).
 - Enderezado automático del modelo (Pixal3D sigue la cámara de la imagen): opción "Enderezar"
   en el addon, `--no-upright` en la CLI.

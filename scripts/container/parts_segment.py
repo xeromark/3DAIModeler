@@ -58,6 +58,51 @@ def load_automask(ckpt: Path):  # type: ignore[no-untyped-def]
     return auto_mask.AutoMask(str(ckpt))
 
 
+def refine_large_parts(automask, mesh, face_ids, args):  # type: ignore[no-untyped-def]
+    """Vuelve a segmentar cada parte grande sola: con menos geometría P3-SAM separa subpiezas
+    que en el modelo completo quedan unidas (p. ej. la hoja y la cabeza de un hacha)."""
+    total = len(face_ids)
+    next_label = int(face_ids.max()) + 1
+    refined = 0
+    labels, counts = np.unique(face_ids, return_counts=True)
+    for label, count in zip(labels, counts, strict=True):
+        if label < 0 or count / total < args.refine:
+            continue
+        faces = np.flatnonzero(face_ids == label)
+        sub = mesh.submesh([faces], append=True, repair=False)
+        sub.merge_vertices()
+        try:
+            _aabb, sub_ids, _ = automask.predict_aabb(
+                sub,
+                point_num=args.points,
+                prompt_num=args.prompts,
+                threshold=args.threshold,
+                post_process=True,
+                clean_mesh_flag=False,
+                is_parallel=False,
+                show_info=False,
+                seed=args.seed,
+                prompt_bs=args.prompt_batch,
+            )
+        except Exception as err:  # una pieza difícil no debe tumbar todo
+            print(f"refine: parte {label} sin refinar ({err})")
+            continue
+        sub_ids = np.asarray(sub_ids)
+        if len(sub_ids) != len(faces):
+            continue
+        sub_labels, sub_counts = np.unique(sub_ids[sub_ids >= 0], return_counts=True)
+        # Aceptar solo si salen al menos 2 piezas relevantes (>= 5 % de la parte).
+        if (sub_counts / len(sub_ids) >= 0.05).sum() < 2:
+            continue
+        keep = sub_labels[np.argmax(sub_counts)]  # la subpieza mayor conserva la etiqueta
+        for sub_label in sub_labels:
+            if sub_label != keep:
+                face_ids[faces[sub_ids == sub_label]] = next_label
+                next_label += 1
+        refined += 1
+    return face_ids, refined
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("glb", type=Path)
@@ -69,6 +114,12 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--prompt-batch", type=int, default=4, help="prompts por lote (más = más VRAM y velocidad)"
+    )
+    parser.add_argument(
+        "--refine",
+        type=float,
+        default=0.0,
+        help="re-segmentar las partes con más de esta fracción de caras (0 = no refinar)",
     )
     parser.add_argument(
         "--precision",
@@ -101,7 +152,11 @@ def main() -> None:
             seed=args.seed,
             prompt_bs=args.prompt_batch,
         )
-    face_ids = np.asarray(face_ids)
+    face_ids = np.asarray(face_ids).copy()
+    refined = 0
+    if args.refine > 0:
+        with autocast:
+            face_ids, refined = refine_large_parts(automask, out_mesh, face_ids, args)
     centers = np.asarray(out_mesh.triangles_center, dtype=np.float32)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(args.out, centers=centers, labels=face_ids.astype(np.int32))
@@ -115,6 +170,7 @@ def main() -> None:
         "seconds": round(time.monotonic() - started, 1),
         "peak_vram_gib": round(torch.cuda.max_memory_allocated() / 1024**3, 2),
         "precision": args.precision,
+        "refined_parts": refined,
     }
     print("RESULT " + json.dumps(result))
 

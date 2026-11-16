@@ -329,6 +329,7 @@ class THREEDAI_PT_generate(_Base, bpy.types.Panel):
             ok = False
             box.operator("threedai.parts_install", icon="IMPORT")
         if ok:
+            box.prop(context.scene.threedai, "parts_detail")
             wrapped(box, context, "Licencia Hunyuan 3D-Part: no válida en UE, UK ni Corea.")
         return ok
 

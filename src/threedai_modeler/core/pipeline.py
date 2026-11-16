@@ -25,6 +25,8 @@ from .workflows import GenerationParams, build_workflow, output_files, set_input
 
 ProgressFn = Callable[["Progress"], None]
 PARTS_MODEL = "p3sam"
+PARTS_REFINE = 0.3
+"""Partes con más de este 30 % de las caras se vuelven a segmentar solas (modo detallado)."""
 
 VIEW_AZIMUTH = {"front": 0.0, "left": 90.0, "back": 180.0, "right": 270.0}
 MULTIVIEW_PAD = 1.1
@@ -313,6 +315,8 @@ class Pipeline:
                     self.runner.engine_path(weights),
                     "--seed",
                     str(job.seed),
+                    "--refine",
+                    str(PARTS_REFINE if job.parts_detail == "detailed" else 0.0),
                 ]
             )
         line = next((ln for ln in stdout.splitlines() if ln.startswith("RESULT ")), None)

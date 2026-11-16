@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "threedai_modeler"
-version = "0.1.0"
+version = "1.0.0"
 name = "3DAI Modeler"
 tagline = "Local AI image-to-3D generation with parts and polycount control"
 maintainer = "xeromark"

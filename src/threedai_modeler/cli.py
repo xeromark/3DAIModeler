@@ -137,6 +137,7 @@ def cmd_generate(ws: Workspace, reg: Registry, args: argparse.Namespace) -> int:
         seed=args.seed if args.seed is not None else random.randrange(2**31),
         name=args.name,
         parts=args.parts,
+        parts_detail=args.parts_detail,
         upright=not args.no_upright,
         views=views,
         custom_quality=custom,
@@ -290,6 +291,12 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--name", help="nombre del objeto en Blender (por defecto, el de la imagen)")
     gen.add_argument("--parts", action="store_true", help="separar el modelo en partes (P3-SAM)")
     gen.add_argument("--no-upright", action="store_true", help="no enderezar el modelo")
+    gen.add_argument(
+        "--parts-detail",
+        choices=("normal", "detailed"),
+        default="detailed",
+        help="detailed: re-segmenta las piezas grandes",
+    )
     for view, label in (("left", "izquierda"), ("back", "espalda"), ("right", "derecha")):
         gen.add_argument(f"--{view}", help=f"imagen de la vista {label} (usa el modelo multivista)")
     gen.set_defaults(fn=cmd_generate)

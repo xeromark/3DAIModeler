@@ -383,7 +383,7 @@ hoja + cabeza) en ~45 s extra con 6.4 GiB de VRAM; probado desde la CLI y desde 
 **Aceptación:** el preset `max` supera la línea base de M1 en el benchmark (comparación visual
 documentada).
 
-### M7 — Robustez y v1.0
+### M7 — Robustez y v1.0 *(completo)*
 
 - Reanudación de trabajos desde la interfaz, mensajes de error revisados y limpieza de trabajos viejos.
 - Documentación de usuario.
