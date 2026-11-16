@@ -387,6 +387,7 @@ class THREEDAI_OT_generate(bpy.types.Operator):
             views=views,
             custom_quality=props.custom_quality() if props.quality == "custom" else None,
             exports=props.exports(),
+            project_texture=props.project_texture,
         )
         blender = Path(bpy.app.binary_path)
         rt.refresh()

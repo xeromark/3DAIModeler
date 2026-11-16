@@ -17,9 +17,13 @@ from pathlib import Path
 
 import bmesh
 import bpy
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import numpy as np
 from mathutils import Matrix, Vector
 from mathutils.kdtree import KDTree
+
+from projection import project_image
 
 FACE_TOLERANCE = 0.05
 UPRIGHT_MAX_TILT = 40.0
@@ -40,6 +44,8 @@ def parse_args() -> argparse.Namespace:
         "--no-upright", dest="upright", action="store_false", help="no enderezar el modelo"
     )
     parser.add_argument("--export", default="", help="formatos extra separados por coma: fbx,obj")
+    parser.add_argument("--project", type=Path, help="imagen recortada para proyectar (con alfa)")
+    parser.add_argument("--project-fov", type=float, default=0.0, help="FOV horizontal (grados)")
     return parser.parse_args(argv)
 
 
@@ -295,6 +301,10 @@ def main() -> None:
     objects = import_glb(args.glb)
     flatten_hierarchy(objects)
     apply_transforms(objects)
+    projection: dict = {"applied": False}
+    if args.project is not None and args.project_fov > 0 and len(objects) == 1:
+        # Antes de enderezar o mover: la cámara de Pixal3D está en las coordenadas originales.
+        projection = project_image(objects[0], args.project, args.project_fov)
     if args.parts is not None and len(objects) == 1:
         objects = split_parts(objects[0], args.parts)
     upright = auto_upright(objects) if args.upright else {"applied": False}
@@ -322,6 +332,7 @@ def main() -> None:
         "target_faces": args.target_faces,
         "faces_within_tolerance": within,
         "upright": upright,
+        "projection": projection,
         "exported": exported,
         "packed_images": packed,
         "materials": material_report(objects),

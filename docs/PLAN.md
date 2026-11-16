@@ -374,6 +374,8 @@ hoja + cabeza) en ~45 s extra con 6.4 GiB de VRAM; probado desde la CLI y desde 
 
 - [x] Multivista con Pixal3D (RF-02): frente + izquierda/espalda/derecha opcionales.
 - Varias semillas con previews y elección en el panel (RF-15).
+- [x] Proyección de la imagen original sobre la textura (Pixal3D de una imagen).
+- [ ] Proyección también con multivista (una cámara por vista).
 - Upscale de texturas a 4K.
 - Presets `draft` / `standard` / `max`, ajustados con el benchmark.
 - ~~Texto → imagen local (RF-03)~~: descartado (D13).

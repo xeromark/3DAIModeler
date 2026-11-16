@@ -161,6 +161,8 @@ class Pipeline:
         )
         workflow = build_workflow(self.ws.workflows_dir, self.registry, params)
         set_input(workflow, "save", "filename_prefix", f"threedai/{job.id}")
+        if "save_projection" in workflow:
+            set_input(workflow, "save_projection", "filename_prefix", f"threedai/{job.id}_proj")
 
         timer = _Timer()
         current: dict[str, str] = {"label": ""}
@@ -192,6 +194,12 @@ class Pipeline:
         self.client.download(files[0], dest)
         record.outputs = {"glb": str(dest.relative_to(job.dir))}
         record.metrics = {**monitor.as_dict(), "stage_seconds": timer.rounded()}
+        projection = outputs.get("save_projection", {})
+        if projection.get("images") and projection.get("fov"):
+            proj = job.dir / "generate" / "projection.png"
+            self.client.download(projection["images"][0], proj)
+            record.outputs["projection"] = str(proj.relative_to(job.dir))
+            record.metrics["projection_fov"] = float(projection["fov"][0])
 
     def _postprocess(
         self,
@@ -213,6 +221,10 @@ class Pipeline:
             args += ["--parts", str(labels)]
         if not job.upright:
             args.append("--no-upright")
+        projection = job.output_path("generate", "projection")
+        fov = job.stages["generate"].metrics.get("projection_fov")
+        if job.project_texture and projection is not None and projection.is_file() and fov:
+            args += ["--project", str(projection), "--project-fov", str(fov)]
         if job.exports:
             args += ["--export", ",".join(job.exports)]
         started = time.monotonic()

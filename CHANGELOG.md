@@ -59,6 +59,12 @@ El proyecto usa [SemVer](https://semver.org/lang/es/).
   junto al modelo como `model_color.png`, `model_normal.png` y `model_orm.png`.
 - Optimización de memoria: `--cache-none` en el motor (−2 GiB de RAM retenida, −1.6 GiB de VRAM
   pico), nodo propio que libera la VRAM antes de hornear, P3-SAM en bf16 (32 % más rápido).
+- **Proyección de textura** (Pixal3D): la imagen original se proyecta sobre el modelo con la
+  misma cámara que usó la IA (FOV estimado por MoGe) y se hornea en la textura de color, solo
+  donde la superficie es visible y mira a la cámara, con transición suave hacia la textura
+  generada. Cara, tatuajes, emblemas y ornamentos quedan con la nitidez de la imagen. Se cancela
+  sola si la cámara no coincide con el modelo. Opción "Proyectar imagen" (activa por defecto),
+  CLI `--no-project`.
 - Panel **Estilos** (visualización en Blender, reversible): Anime / Cel shading (bandas de
   sombra y contorno por casco invertido), Blanco y negro, Colores saturados y Acuarela
   (compositor con filtro Kuwahara). Intensidad ajustable; se ve en el viewport y en el render, y

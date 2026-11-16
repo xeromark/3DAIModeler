@@ -554,5 +554,50 @@
         0
       ]
     }
+  },
+  "save_projection": {
+    "class_type": "ThreeDAISaveProjection",
+    "inputs": {
+      "image": [
+        "crop",
+        0
+      ],
+      "fov": [
+        "fov",
+        0
+      ],
+      "filename_prefix": "threedai/proj",
+      "mask": [
+        "crop_mask",
+        0
+      ]
+    }
+  },
+  "mask_image": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "bg_remove",
+        0
+      ]
+    }
+  },
+  "crop_mask": {
+    "class_type": "ImageCropToMask",
+    "inputs": {
+      "images": [
+        "mask_image",
+        0
+      ],
+      "masks": [
+        "bg_remove",
+        0
+      ],
+      "width": 1024,
+      "height": 1024,
+      "pad_factor": 1.1,
+      "grow_mask": 0,
+      "background": "#000000"
+    }
   }
 }

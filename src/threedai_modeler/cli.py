@@ -141,6 +141,7 @@ def cmd_generate(ws: Workspace, reg: Registry, args: argparse.Namespace) -> int:
         views=views,
         custom_quality=custom,
         exports=[f for f in args.export.split(",") if f],
+        project_texture=not args.no_project,
     )
     return _run_job(ws, reg, job)
 
@@ -279,6 +280,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="con --quality custom, p. ej. texture_size=8192 shape_steps=40",
     )
     gen.add_argument("--export", default="", help="formatos extra: fbx,obj")
+    gen.add_argument(
+        "--no-project", action="store_true", help="no proyectar la imagen sobre el modelo"
+    )
     gen.add_argument(
         "--faces", default="medium", help="low | medium | high | ultra | none | número"
     )

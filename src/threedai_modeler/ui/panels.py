@@ -290,6 +290,7 @@ class THREEDAI_PT_generate(_Base, bpy.types.Panel):
         row = layout.row()
         row.prop(props, "split_parts")
         row.prop(props, "upright")
+        layout.prop(props, "project_texture")
 
         ready = rt.model_states.get(model_id) is ModelState.INSTALLED
         if not ready and views:

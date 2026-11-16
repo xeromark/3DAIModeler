@@ -59,6 +59,14 @@ class THREEDAI_Props(bpy.types.PropertyGroup):
         description="Divide el modelo en partes (P3-SAM); cada parte es un objeto",
         default=False,
     )
+    project_texture: BoolProperty(
+        name="Proyectar imagen",
+        description=(
+            "Proyecta tu imagen sobre el modelo: texturas con la nitidez de la imagen en lo "
+            "visible desde el frente (solo Pixal3D)"
+        ),
+        default=True,
+    )
     upright: BoolProperty(
         name="Enderezar",
         description="Gira el modelo si sale inclinado respecto al suelo (fotos desde arriba)",
